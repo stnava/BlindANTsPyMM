@@ -1,10 +1,10 @@
-# ANTsPyMM
+# blindANTsPyMM
 
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/ANTsX/ANTsPyMM/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/ANTsX/ANTsPyMM/tree/main)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/stnava/blindANTsPyMM/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/stnava/blindANTsPyMM/tree/main)
 
 ![mapping](https://i.imgur.com/qKqYjU9.jpeg)
 
-## processing utilities for timeseries/multichannel images - mostly neuroimaging
+## processing utilities for timeseries/multichannel images - few to no assumptions about species or organ system
 
 the outputs of these processes can be used for data inspection/cleaning/triage
 as well for interrogating hypotheses.
@@ -21,12 +21,12 @@ python3 -m  build .
 or install the latest release via 
 
 ```
-pip install antspymm
+pip install blindantspymm
 ```
 
 # what this will do
 
-ANTsPyMM will process several types of brain MRI into tabular form as well as normalized (standard template) space.  The processing includes:
+blindANTsPyMM will process several types of brain MRI into tabular form as well as normalized (standard template) space.  The processing includes:
 
 * T1wHier uses hierarchical processing from ANTsPyT1w organized around these measurements
 
@@ -155,7 +155,7 @@ Similar functionality exists for segmentation of white matter hyperintensities a
 
 ```python
 import antspyt1w
-import antspymm
+import blindantspymm
 antspyt1w.get_data(force_download=True)
 antspymm.get_data(force_download=True)
 ```
@@ -177,7 +177,7 @@ os.environ["TF_NUM_INTEROP_THREADS"] = "8"
 os.environ["TF_NUM_INTRAOP_THREADS"] = "8"
 os.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = "8"
 
-import antspymm
+import blindantspymm
 import antspyt1w
 import antspynet
 import ants
@@ -224,7 +224,7 @@ matched_mm_data=antspymm.match_modalities( qcdfaol  )
 or just get modality-specific outlierness "by hand" then match `mm`:
 
 ```python
-import antspymm
+import blindantspymm
 import pandas as pd
 mymods = antspymm.get_valid_modalities( )
 alldf = pd.DataFrame()
@@ -270,7 +270,7 @@ imagesBIDS/
 ```
 
 ```python
-import antspymm
+import blindantspymm
 import pandas as pd
 import glob as glob
 fns = glob.glob("imagesBIDS/ANTPD/sub-RC4125/ses-*/*/*gz")
@@ -324,7 +324,7 @@ imagesNRG/
 
 
 ```python
-import antspymm
+import blindantspymm
 import pandas as pd
 import glob as glob
 t1fn=glob.glob("imagesNRG/ANTPD/sub-RC4125/ses-*/*/*/*T1w*gz")[0]
@@ -407,7 +407,7 @@ mmrun = antspymm.mm_csv( studycsv2,
 if you have a large population study then the last step would look like this:
 
 ```python
-import antspymm
+import blindantspymm
 import glob as glob
 import re
 import pandas as pd
