@@ -5,3 +5,9 @@ except:
     pass
 
 from .mm import version
+from .mm import structural
+from .mm import dwi
+from .mm import rsfmri
+from .mm import pet
+
+
