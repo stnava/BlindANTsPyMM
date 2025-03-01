@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blindantspymm"
-version = "0.0.0"
-description = "multi-channel/time-series medical image processing with antspyx"
+version = "0.1.0"
+description = "blind multi-channel/time-series medical image processing with antspyx"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "Apache 2.0" }
@@ -21,6 +21,7 @@ dependencies = [
     "antspynet>=0.2.8",
     "antspyt1w>=0.9.3",
     "antspymm",
+    "curvanato",
     "pathlib",
     "dipy",
     "nibabel",
