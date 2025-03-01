@@ -740,6 +740,45 @@ def rsfmri_to_correlation_matrix(rsfmri, roi_labels):
     return corMat
 
 
+def rsfmri_to_correlation_matrix_wide(rsfmri, roi_labels):
+    """
+    Compute the correlation matrix from an rsfMRI image given an ROI label image.
+    
+    Parameters:
+    rsfmri : ANTsImage
+        4D resting-state fMRI image.
+    roi_labels : ANTsImage
+        3D image with labeled ROIs.
+
+    Returns:
+    pd.DataFrame
+        A one-row dataframe containing the non-diagonal elements of the correlation matrix,
+        named according to the ROI pairs.
+    """
+    import itertools
+    # Get unique ROI labels (excluding background)
+    unique_labels = np.unique(roi_labels.numpy())
+    unique_labels = unique_labels[unique_labels > 0]
+
+    # Compute mean time series for each ROI
+    meanROI = np.zeros((rsfmri.shape[-1], len(unique_labels)))
+    for i, label in enumerate(unique_labels):
+        roi_mask = ants.threshold_image(roi_labels, label, label)
+        meanROI[:, i] = ants.timeseries_to_matrix(rsfmri, roi_mask).mean(axis=1)
+
+    # Compute correlation matrix
+    corMat = np.corrcoef(meanROI, rowvar=False)
+
+    # Extract upper triangle (excluding diagonal)
+    roi_pairs = list(itertools.combinations(unique_labels, 2))
+    cor_values = corMat[np.triu_indices(len(unique_labels), k=1)]
+
+    # Construct a well-named dataframe without special characters
+    col_names = [f"Corr_Label{int(a)}_Label{int(b)}" for a, b in roi_pairs]
+    df_wide = pd.DataFrame([cor_values], columns=col_names)
+
+    return df_wide
+
 def rsfmri( fmri, simg, simg_mask, simg_labels,
     f=[0.03, 0.08],
     FD_threshold=5.0,
@@ -1030,8 +1069,15 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   gmmat = ants.timeseries_to_matrix( simg, bmask )
   gmmat = ants.regress_components( gmmat, nuisance )
   simg = ants.matrix_to_timeseries(simg, gmmat, bmask)
-  mycmat = rsfmri_to_correlation_matrix( simg, rsflabels )
+  mycmat = rsfmri_to_correlation_matrix_wide( simg, rsflabels )
+  perafimg = antspymm.PerAF( simgimp, bmask )
 
+  stats_alf = ants.label_stats(myfalff['alff'],rsflabels )
+  stats_alf = widen_summary_dataframe(stats_alf, description='LabelValue', value='Mean', skip_first=True )
+  stats_flf = ants.label_stats(myfalff['falff'],rsflabels )
+  stats_flf = widen_summary_dataframe(stats_flf, description='LabelValue', value='Mean', skip_first=True )
+  stats_prf = ants.label_stats(perafimg,rsflabels )
+  stats_prf = widen_summary_dataframe(stats_prf, description='LabelValue', value='Mean', skip_first=True )
 
   # structure the output data
   outdict = {}
@@ -1048,7 +1094,6 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   outdict['falff_mean'] = (myfalff['falff'][myfalff['falff']!=0]).mean()
   outdict['falff_sd'] = (myfalff['falff'][myfalff['falff']!=0]).std()
 
-  perafimg = antspymm.PerAF( simgimp, bmask )
   rsfNuisance = pd.DataFrame( nuisance )
   if remove_it:
     import shutil
@@ -1075,4 +1120,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   outdict['minutes_original_data'] = ( tr * fmri.shape[3] ) / 60.0 # minutes of useful data
   outdict['minutes_censored_data'] = ( tr * simg.shape[3] ) / 60.0 # minutes of useful data
   outdict['correlation'] = mycmat
+  outdict['label_mean_alff'] = stats_alf
+  outdict['label_mean_falff'] = stats_flf
+  outdict['label_mean_peraf'] = stats_prf
   return antspymm.convert_np_in_dict( outdict )
