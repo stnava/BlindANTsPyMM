@@ -10,6 +10,9 @@ num='012'
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
+pfimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/perf/sub-PTCRA'+num+'_run-001_perf.nii.gz' )
+
+
 dwifn = ddir + 'NiftiMRI/sub-PTCRA'+num+'/dwi/sub-PTCRA'+num+'_run-001_dti.nii.gz'
 dwibval = re.sub( 'nii.gz' , 'bval' , dwifn )
 dwibvec = re.sub( 'nii.gz' , 'bvec' , dwifn )
@@ -37,15 +40,18 @@ if not "s" in globals():
     print( s['brain_mask_overlap'] )
 #    ants.plot( simg * simg_mask, s['inverse_warped_labels'], crop=True )
 
+if not "mypet" in globals():
+    pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
+    mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
+
+if not "prf" in globals():
+    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, verbose=True )
+    print(prf.keys())
+
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
 
-if not "rsf" in globals():
+if not "rsf" in globals(): # not implemented yet
     rsf = blindantspymm.rsfmri( rimg, simg, simg_mask, s_labels )
 
-if not "prf" in globals():
-    prf = blindantspymm.perfusion( pimg, simg, simg_mask, s_labels )
-
-if not "pet" in globals():
-    pet = blindantspymm.pet( petimg, simg, simg_mask, s_labels )
-
+s
