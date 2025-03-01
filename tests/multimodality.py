@@ -4,6 +4,8 @@ import ants          #
 import antspymm      #
 import curvanato     #
 import re            #
+import random        #
+random.seed(42)  # Any fixed integer seed
 tdir = "/Users/stnava/Downloads/Ferret/"
 ddir = "/Users/stnava/Downloads/Ferret2/"
 num='012'
@@ -33,12 +35,22 @@ if not "tlab" in globals():
     ants.image_write( timgbc, '/tmp/tempb.nii.gz')
     ants.image_write( ptemlab, '/tmp/templab.nii.gz')
 
+# here i am using these data-driven labels rather than the prior-based labels 
+# because i believe they are a little more generically relevant for the resolution 
+# of the data on hand
 template_labels = curvanato.cluster_image_gradient_prop( template_mask, n_clusters=8, sigma=1.0 )
 if not "s" in globals():
     s = blindantspymm.structural( simg, simg_mask, template, template_mask, template_labels )
     s_labels = s['inverse_warped_labels']
     print( s['brain_mask_overlap'] )
-#    ants.plot( simg * simg_mask, s['inverse_warped_labels'], crop=True )
+#    ants.plot( simg * simg_mask, s_labels, crop=True )
+
+if not "rsf" in globals(): # not implemented yet
+    print("Begin rsf")
+    rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(55,1000) )
+    rsf = blindantspymm.rsfmri( rimgsub, simg, simg_mask, s_labels, verbose=True )
+
+deeek
 
 if not "mypet" in globals():
     pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
@@ -51,7 +63,4 @@ if not "prf" in globals():
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
 
-if not "rsf" in globals(): # not implemented yet
-    rsf = blindantspymm.rsfmri( rimg, simg, simg_mask, s_labels )
 
-s

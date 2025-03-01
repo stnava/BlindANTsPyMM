@@ -715,28 +715,364 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
         'label_mean_fa': stats_fa,
         'label_mean_md': stats_md}
 
-def rsfmri(rimg, simg, simg_mask):
-    """
-    Perform resting-state fMRI processing.  Connectivity and activation measurements.
 
+def rsfmri_to_correlation_matrix(rsfmri, roi_labels):
+    """
+    Compute the correlation matrix for an rs-fMRI image using the given ROI labels.
+    
     Parameters:
-    rimg : ANTs image
-        Resting-state fMRI image.
-    simg : ANTs image
+    rsfmri (ants.ANTsImage): The resting-state fMRI 4D image.
+    roi_labels (ants.ANTsImage): The ROI label image.
+    
+    Returns:
+    np.ndarray: The correlation matrix of the extracted mean time series from each ROI.
+    """
+    unique_labels = np.unique(roi_labels.numpy())
+    unique_labels = unique_labels[unique_labels > 0]  # Exclude background (label 0)
+    
+    meanROI = np.zeros((rsfmri.shape[-1], len(unique_labels)))
+    
+    for i, label in enumerate(unique_labels):
+        roi_mask = roi_labels == label
+        meanROI[:, i] = ants.timeseries_to_matrix(rsfmri, roi_mask).mean(axis=1)
+    
+    corMat = np.corrcoef(meanROI, rowvar=False)
+    return corMat
+
+
+def rsfmri( fmri, simg, simg_mask, simg_labels,
+    f=[0.03, 0.08],
+    FD_threshold=5.0,
+    spa = None,
+    spt = None,
+    nc = 5,
+    outlier_threshold=0.250,
+    ica_components = 0,
+    impute = True,
+    censor = True,
+    despike = 2.5,
+    motion_as_nuisance = True,
+    powers = False,
+    upsample = 3.0,
+    clean_tmp = None,
+    verbose=False ):
+  """
+  Compute resting state network correlation maps based on user input labels.
+
+  registration - despike - anatomy - smooth - nuisance - bandpass - regress.nuisance - censor - falff - correlationss
+
+  Arguments
+  ---------
+  fmri : BOLD fmri antsImage
+
+  simg : ANTs image
         Structural image.
-    simg_mask : ANTs image
+
+  simg_mask : ANTs image
         Structural mask.
-    simg_labels : ANTs image
+
+  simg_labels : ANTs image
         Structural labels within which we summarize features.
 
-    Returns:
-    dict
-        Dictionary containing processed resting state fMRI data.
+  f : band pass limits for frequency filtering; we use high-pass here as per Shirer 2015
+
+  spa : gaussian smoothing for spatial component (physical coordinates)
+
+  spt : gaussian smoothing for temporal component
+
+  nc  : number of components for compcor filtering; if less than 1 we estimate on the fly based on explained variance; 10 wrt Shirer 2015 5 from csf and 5 from wm
+
+  ica_components : integer if greater than 0 then include ica components
+
+  impute : boolean if True, then use imputation in f/ALFF, PerAF calculation
+
+  censor : boolean if True, then use censoring (censoring)
+
+  despike : if this is greater than zero will run voxel-wise despiking in the 3dDespike (afni) sense; after motion-correction
+
+  motion_as_nuisance: boolean will add motion and first derivative of motion as nuisance
+
+  powers : boolean if True use Powers nodes otherwise 2023 Yeo 500 homotopic nodes (10.1016/j.neuroimage.2023.120010)
+
+  upsample : float optionally isotropically upsample data to upsample (the parameter value) in mm during the registration process if data is below that resolution; if the input spacing is less than that provided by the user, the data will simply be resampled to isotropic resolution
+
+  clean_tmp : will automatically try to clean the tmp directory - not recommended but can be used in distributed computing systems to help prevent failures due to accumulation of tmp files when doing large-scale processing.  if this is set, the float value clean_tmp will be interpreted as the age in hours of files to be cleaned.
+
+  verbose : boolean
+
+  Returns
+  ---------
+  a dictionary containing the derived network maps
+
+  References
+  ---------
+
+  10.1162/netn_a_00071 "Methods that included global signal regression were the most consistently effective de-noising strategies."
+
+  10.1016/j.neuroimage.2019.116157 "frontal and default model networks are most reliable whereas subcortical neteworks are least reliable"  "the most comprehensive studies of pipeline effects on edge-level reliability have been done by shirer (2015) and Parkes (2018)" "slice timing correction has minimal impact" "use of low-pass or narrow filter (discarding  high frequency information) reduced both reliability and signal-noise separation"
+
+  10.1016/j.neuroimage.2017.12.073: Our results indicate that (1) simple linear regression of regional fMRI time series against head motion parameters and WM/CSF signals (with or without expansion terms) is not sufficient to remove head motion artefacts; (2) aCompCor pipelines may only be viable in low-motion data; (3) volume censoring performs well at minimising motion-related artefact but a major benefit of this approach derives from the exclusion of high-motion individuals; (4) while not as effective as volume censoring, ICA-AROMA performed well across our benchmarks for relatively low cost in terms of data loss; (5) the addition of global signal regression improved the performance of nearly all pipelines on most benchmarks, but exacerbated the distance-dependence of correlations between motion and functional connec- tivity; and (6) group comparisons in functional connectivity between healthy controls and schizophrenia patients are highly dependent on preprocessing strategy. We offer some recommendations for best practice and outline simple analyses to facilitate transparent reporting of the degree to which a given set of findings may be affected by motion-related artefact.
+
+  10.1016/j.dcn.2022.101087 : We found that: 1) the most efficacious pipeline for both noise removal and information recovery included censoring, GSR, bandpass filtering, and head motion parameter (HMP) regression, 2) ICA-AROMA performed similarly to HMP regression and did not obviate the need for censoring, 3) GSR had a minimal impact on connectome fingerprinting but improved ISC, and 4) the strictest censoring approaches reduced motion correlated edges but negatively impacted identifiability.
+
+  """
+
+  import warnings
+
+  if clean_tmp is not None:
+    clean_tmp_directory( age_hours = clean_tmp )
+
+  if nc > 1:
+    nc = int(nc)
+  else:
+    nc=float(nc)
+
+  type_of_transform='Rigid' # , # should probably not change this
+  remove_it=True
+  output_directory = tempfile.mkdtemp()
+  output_directory_w = output_directory + "/ts_t1_reg/"
+  os.makedirs(output_directory_w,exist_ok=True)
+  ofnt1tx = tempfile.NamedTemporaryFile(delete=False,suffix='t1_deformation',dir=output_directory_w).name
+
+  import numpy as np
+# Assuming core and utils are modules or packages with necessary functions
+  if verbose:
+    print("rsf template")
+  fmri_template = antspymm.get_average_rsf( fmri )
+  if verbose:
+    print("rsf template to structure registration")
+  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
+  if verbose:
+    print("rsf template mask and labels")
+  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'][0], interpolator='genericLabel' )
+  rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['fwdtransforms'][0], interpolator='genericLabel' )
+#  if verbose:
+#    ants.plot( fmri_template, bmask, crop=True )
+#    ants.plot( fmri_template, rsflabels, crop=True )
+
+  if upsample > 0.0:
+      spc = ants.get_spacing( fmri )
+      minspc = upsample
+      if min(spc[0:3]) < minspc:
+          minspc = min(spc[0:3])
+      newspc = [minspc,minspc,minspc]
+      fmri_template = ants.resample_image( fmri_template, newspc, interp_type=0 )
+
+  def temporal_derivative_same_shape(array):
     """
-    rsfmean = ants.get_average_of_timeseries(rimg)
-    rsfreg = antspymm.tra_initializer(simg, rsfmean, n_simulations=32, max_rotation=30, transform=['rigid', 'syn'], verbose=True)
-    rsfmask = ants.apply_transforms(rsfmean, simg_mask, rsfreg['invtransforms'], whichtoinvert=[True], interpolator='nearestNeighbor')
+    Compute the temporal derivative of a 2D numpy array along the 0th axis (time)
+    and ensure the output has the same shape as the input.
+
+    :param array: 2D numpy array with time as the 0th axis.
+    :return: 2D numpy array of the temporal derivative with the same shape as input.
+    """
+    derivative = np.diff(array, axis=0)
+    
+    # Append a row to maintain the same shape
+    # You can choose to append a row of zeros or the last row of the derivative
+    # Here, a row of zeros is appended
+    zeros_row = np.zeros((1, array.shape[1]))
+    return np.vstack((zeros_row, derivative ))
+
+  def compute_tSTD(M, quantile, x=0, axis=0):
+    stdM = np.std(M, axis=axis)
+    # set bad values to x
+    stdM[stdM == 0] = x
+    stdM[np.isnan(stdM)] = x
+    tt = round(quantile * 100)
+    threshold_std = np.percentile(stdM, tt)
+    return {'tSTD': stdM, 'threshold_std': threshold_std}
+
+  def get_compcor_matrix(boldImage, mask, quantile):
+    """
+    Compute the compcor matrix.
+
+    :param boldImage: The bold image.
+    :param mask: The mask to apply, if None, it will be computed.
+    :param quantile: Quantile for computing threshold in tSTD.
+    :return: The compor matrix.
+    """
+    if mask is None:
+        temp = ants.slice_image(boldImage, axis=boldImage.dimension - 1, idx=0)
+        mask = ants.get_mask(temp)
+
+    imagematrix = ants.timeseries_to_matrix(boldImage, mask)
+    temp = compute_tSTD(imagematrix, quantile, 0)
+    tsnrmask = ants.make_image(mask, temp['tSTD'])
+    tsnrmask = ants.threshold_image(tsnrmask, temp['threshold_std'], temp['tSTD'].max())
+    M = ants.timeseries_to_matrix(boldImage, tsnrmask)
+    return M
 
 
+  from sklearn.decomposition import FastICA
+  def find_indices(lst, value):
+    return [index for index, element in enumerate(lst) if element > value]
 
-    return {'registered_rsfmri': rsfreg['warpedfixout'], 'rsfmri_mask': rsfmask}
+  def mean_of_list(lst):
+    if not lst:  # Check if the list is not empty
+        return 0  # Return 0 or appropriate value for an empty list
+    return sum(lst) / len(lst)
+  fmrispc = list( ants.get_spacing( fmri ) )
+  if spa is None:
+    spa = mean_of_list( fmrispc[0:3] ) * 1.0
+  if spt is None:
+    spt = fmrispc[3] * 0.5
+      
+  import numpy as np
+  import pandas as pd
+  import re
+  import math
+  # point data resources
+  A = np.zeros((1,1))
+  fmri = ants.iMath( fmri, 'Normalize' )
+  if verbose:
+      print("Begin rsfmri motion correction")
+  # mot-co
+  corrmo = antspymm.timeseries_reg(
+    fmri, fmri_template,
+    type_of_transform=type_of_transform,
+    total_sigma=0.5,
+    fdOffset=2.0,
+    trim = 8,
+    output_directory=None,
+    verbose=verbose,
+    syn_metric='cc',
+    syn_sampling=2,
+    reg_iterations=[40,20,5],
+    return_numpy_motion_parameters=True )
+  
+  if verbose:
+      print("End rsfmri motion correction")
+      print("=== next anatomically based mapping ===")
+
+  despiking_count = np.zeros( corrmo['motion_corrected'].shape[3] )
+  if despike > 0.0:
+      corrmo['motion_corrected'], despiking_count = antspymm.despike_time_series_afni( corrmo['motion_corrected'], c1=despike )
+
+  despiking_count_summary = despiking_count.sum() / np.prod( corrmo['motion_corrected'].shape )
+  high_motion_count=(corrmo['FD'] > FD_threshold ).sum()
+  high_motion_pct=high_motion_count / fmri.shape[3]
+
+  # filter mask based on TSNR
+  mytsnr = antspymm.tsnr( corrmo['motion_corrected'], bmask )
+
+  # anatomical mapping
+  und = fmri_template * bmask
+  # optional smoothing
+  tr = ants.get_spacing( corrmo['motion_corrected'] )[3]
+  smth = ( spa, spa, spa, spt ) # this is for sigmaInPhysicalCoordinates = TRUE
+  simg = ants.smooth_image( corrmo['motion_corrected'], smth, sigma_in_physical_coordinates = True )
+
+  # collect censoring indices
+  hlinds = find_indices( corrmo['FD'], FD_threshold )
+  if verbose:
+    print("high motion indices")
+    print( hlinds )
+  if outlier_threshold < 1.0 and outlier_threshold > 0.0:
+    fmrimotcorr, hlinds2 = antspymm.loop_timeseries_censoring( corrmo['motion_corrected'], 
+      threshold=outlier_threshold, verbose=verbose )
+    hlinds.extend( hlinds2 )
+    del fmrimotcorr
+  hlinds = list(set(hlinds)) # make unique
+
+  # nuisance
+  globalmat = ants.timeseries_to_matrix( corrmo['motion_corrected'], bmask )
+  globalsignal = np.nanmean( globalmat, axis = 1 )
+  del globalmat
+  nuisance = ants.compcor( corrmo['motion_corrected'],
+    ncompcor=nc, quantile=0.5, mask = bmask,
+    filter_type='polynomial', degree=2 )[ 'components' ]
+
+  if motion_as_nuisance:
+      if verbose:
+          print("include motion as nuisance")
+          print( corrmo['motion_parameters'].shape )
+      deriv = temporal_derivative_same_shape( corrmo['motion_parameters']  )
+      nuisance = np.c_[ nuisance, corrmo['motion_parameters'], deriv ]
+
+  if ica_components > 0:
+    if verbose:
+        print("include ica components as nuisance: " + str(ica_components))
+    ica = FastICA(n_components=ica_components, max_iter=10000, tol=0.001, random_state=42 )
+    globalmat = ants.timeseries_to_matrix( corrmo['motion_corrected'], bmask )
+    nuisance_ica = ica.fit_transform(globalmat)  # Reconstruct signals
+    nuisance = np.c_[ nuisance, nuisance_ica ]
+    del globalmat
+
+  nuisance = np.c_[ nuisance, globalsignal ]
+
+  if impute:
+    simgimp = antspymm.impute_timeseries( simg, hlinds, method='linear')
+  else:
+    simgimp = simg
+
+  # falff/alff stuff  def alff_image( x, mask, flo=0.01, fhi=0.1, nuisance=None ):
+  myfalff=antspymm.alff_image( simgimp, bmask, flo=f[0], fhi=f[1], nuisance=nuisance  )
+
+  # bandpass any data collected before here -- if bandpass requested
+  if f[0] > 0 and f[1] < 1.0:
+    if verbose:
+        print( "bandpass: " + str(f[0]) + " <=> " + str( f[1] ) )
+    nuisance = ants.bandpass_filter_matrix( nuisance, tr = tr, lowf=f[0], highf=f[1] ) # some would argue against this
+    globalmat = ants.timeseries_to_matrix( simg, bmask )
+    globalmat = ants.bandpass_filter_matrix( globalmat, tr = tr, lowf=f[0], highf=f[1] ) # some would argue against this
+    simg = ants.matrix_to_timeseries( simg, globalmat, bmask )
+
+  if verbose:
+    print("now regress nuisance")
+
+
+  if len( hlinds ) > 0 :
+    if censor:
+        nuisance = antspymm.remove_elements_from_numpy_array( nuisance, hlinds  )
+        simg = antspymm.remove_volumes_from_timeseries( simg, hlinds )
+
+  gmmat = ants.timeseries_to_matrix( simg, bmask )
+  gmmat = ants.regress_components( gmmat, nuisance )
+  simg = ants.matrix_to_timeseries(simg, gmmat, bmask)
+  mycmat = rsfmri_to_correlation_matrix( simg, rsflabels )
+
+
+  # structure the output data
+  outdict = {}
+  outdict['upsampling'] = upsample
+  outdict['meanBold'] = und
+  outdict['fmri_template'] = fmri_template
+  outdict['brainmask'] = bmask
+  outdict['labels'] = rsflabels
+  outdict['alff'] = myfalff['alff']
+  outdict['falff'] = myfalff['falff']
+  # add global mean and standard deviation for post-hoc z-scoring
+  outdict['alff_mean'] = (myfalff['alff'][myfalff['alff']!=0]).mean()
+  outdict['alff_sd'] = (myfalff['alff'][myfalff['alff']!=0]).std()
+  outdict['falff_mean'] = (myfalff['falff'][myfalff['falff']!=0]).mean()
+  outdict['falff_sd'] = (myfalff['falff'][myfalff['falff']!=0]).std()
+
+  perafimg = antspymm.PerAF( simgimp, bmask )
+  rsfNuisance = pd.DataFrame( nuisance )
+  if remove_it:
+    import shutil
+    shutil.rmtree(output_directory, ignore_errors=True )
+  outdict['motion_corrected'] = corrmo['motion_corrected']
+  outdict['nuisance'] = rsfNuisance
+  outdict['PerAF'] = perafimg
+  outdict['tsnr'] = mytsnr
+  outdict['dvars'] = antspymm.dvars( corrmo['motion_corrected'], bmask )
+  outdict['bandpass_freq_0']=f[0]
+  outdict['bandpass_freq_1']=f[1]
+  outdict['censor']=int(censor)
+  outdict['spatial_smoothing']=spa
+  outdict['outlier_threshold']=outlier_threshold
+  outdict['FD_threshold']=outlier_threshold
+  outdict['high_motion_count'] = high_motion_count
+  outdict['high_motion_pct'] = high_motion_pct
+  outdict['despiking_count_summary'] = despiking_count_summary
+  outdict['FD_max'] = corrmo['FD'].max()
+  outdict['FD_mean'] = corrmo['FD'].mean()
+  outdict['FD_sd'] = corrmo['FD'].std()
+  outdict['bold_evr'] =  antspyt1w.patch_eigenvalue_ratio( und, 512, [16,16,16], evdepth = 0.9, mask = bmask )
+  outdict['n_outliers'] = len(hlinds)
+  outdict['minutes_original_data'] = ( tr * fmri.shape[3] ) / 60.0 # minutes of useful data
+  outdict['minutes_censored_data'] = ( tr * simg.shape[3] ) / 60.0 # minutes of useful data
+  outdict['correlation'] = mycmat
+  return convert_np_in_dict( outdict )
