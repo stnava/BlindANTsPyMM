@@ -100,21 +100,28 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         - 'label_geometry_measures': Geometry measures of the warped labels
     """
     # Perform registration
+    tmask = ants.iMath( template_mask, 'MD', 10 )
+    tbrain = template * template_mask
+    tbrain = ants.crop_image(tbrain, tmask )
+    tbrain[ tbrain < 0. ] = 0.
+    sbrain = simg * simg_mask
+    sbrain[ sbrain < 0.0 ] = 0.0
     reg = ants.registration(
-        fixed=template,
-        moving=simg,
-        type_of_transform=type_of_transform,
-        mask=template_mask
+        fixed=tbrain,
+        moving=sbrain,
+        type_of_transform=type_of_transform
     )
     
-    # Warp the subject mask to the template space
-    warped_mask = ants.apply_transforms(
-        fixed=template,
-        moving=simg_mask,
-        transformlist=reg['fwdtransforms'],
+    inverse_warped_mask = ants.apply_transforms(
+        fixed=simg,
+        moving=template_mask,
+        transformlist=reg['invtransforms'],
         interpolator='nearestNeighbor'
     )
-    
+
+    # for QC purposes
+    mydice = ants.label_overlap_measures( inverse_warped_mask, simg_mask )
+
     # Warp the template labels to subject space using the inverse transform
     inverse_warped_labels = ants.apply_transforms(
         fixed=simg,
@@ -126,7 +133,7 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
     # Compute the Jacobian determinant of the transformation
     jacobian = ants.create_jacobian_determinant_image(
         domain_image=template,
-        transform=reg['fwdtransforms'][0],
+        tx=reg['fwdtransforms'][0],
         do_log=True
     )
     
@@ -134,13 +141,15 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
     label_geometry_measures = ants.label_geometry_measures(inverse_warped_labels)
     
     return {
+        'registration': reg,
         'warped_image': reg['warpedmovout'],
-        'warped_mask': warped_mask,
+        'inverse_warped_mask': inverse_warped_mask,
         'inverse_warped_labels': inverse_warped_labels,
         'forward_transforms': reg['fwdtransforms'],
         'inverse_transforms': reg['invtransforms'],
         'jacobian': jacobian,
-        'label_geometry_measures': label_geometry_measures
+        'label_geometry_measures': label_geometry_measures,
+        'brain_mask_overlap':mydice
     }
 
 
