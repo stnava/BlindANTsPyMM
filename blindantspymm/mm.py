@@ -187,7 +187,7 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         [   label_geometry_measures_w,
             widen_summary_dataframe( label_geometry_measures, 
                 value='SurfaceAreaInMillimetersSquared') ], axis=1 )
-    return {
+    return antspymm.convert_np_in_dict( {
         'registration': reg,
         'warped_image': reg['warpedmovout'],
         'inverse_warped_mask': inverse_warped_mask,
@@ -197,7 +197,7 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         'jacobian': jacobian,
         'label_geometry': label_geometry_measures_w,
         'brain_mask_overlap':mydice
-    }
+    } )
 
 def perfusion( fmri, simg, simg_mask, simg_labels,
                    FD_threshold=0.5,
@@ -708,12 +708,12 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
     stats_fa = widen_summary_dataframe(stats_fa, description='LabelValue', value='Mean', skip_first=False )
     stats_md = widen_summary_dataframe(stats_md, description='LabelValue', value='Mean', skip_first=False )
 
-    return {'registered_dwi': dwireg['warpedfixout'], 'dwimean': dwimean, 
+    return antspymm.convert_np_in_dict( {'registered_dwi': dwireg['warpedfixout'], 'dwimean': dwimean, 
         'dwimask': dwimask,
         'dwilab' :dwilab,
         'dti_results': dti, 
         'label_mean_fa': stats_fa,
-        'label_mean_md': stats_md}
+        'label_mean_md': stats_md} )
 
 
 def rsfmri_to_correlation_matrix(rsfmri, roi_labels):
