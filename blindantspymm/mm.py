@@ -73,7 +73,7 @@ def version( ):
               }
 
 
-def widen_summary_dataframe(mydf, description='Label', value='VolumeInMillimeters', skip_first=False):
+def widen_summary_dataframe(mydf, description='Label', value='VolumeInMillimeters', skip_first=False, prefix='' ):
     """
     Convert a long-format dataframe to a single-row wide-format dataframe.
 
@@ -83,6 +83,7 @@ def widen_summary_dataframe(mydf, description='Label', value='VolumeInMillimeter
     - description: str, column name that represents the categories (e.g., 'Label').
     - value: str, column name with numerical values to be spread into wide format.
     - skip_first: boolean, skips the first row
+    - prefix: string prefix for column names
 
     Returns:
     - pd.DataFrame, reshaped into wide format where each category has its own column.
@@ -109,6 +110,7 @@ def widen_summary_dataframe(mydf, description='Label', value='VolumeInMillimeter
     # Reset index to ensure it's a proper DataFrame
     df_wide = df_wide.reset_index(drop=True)
 
+    df_wide = df_wide.add_prefix( prefix )
 
     return df_wide
 
@@ -182,11 +184,12 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
     
     # Compute label geometry measures
     label_geometry_measures = ants.label_geometry_measures(inverse_warped_labels)
-    label_geometry_measures_w = widen_summary_dataframe( label_geometry_measures, value='VolumeInMillimeters')
+    label_geometry_measures_w = widen_summary_dataframe( label_geometry_measures, value='VolumeInMillimeters' )
     label_geometry_measures_w = pd.concat( 
         [   label_geometry_measures_w,
             widen_summary_dataframe( label_geometry_measures, 
                 value='SurfaceAreaInMillimetersSquared') ], axis=1 )
+    label_geometry_measures_w=label_geometry_measures_w.add_prefix("smri.")
     return antspymm.convert_np_in_dict( {
         'registration': reg,
         'warped_image': reg['warpedmovout'],
@@ -536,10 +539,11 @@ Where:
 
   stats_pf = ants.label_stats(perfimg,dktseg )
   stats_cb = ants.label_stats(cbf,dktseg )
-  stats_pf = widen_summary_dataframe(stats_pf, description='LabelValue', value='Mean', skip_first=True )
-  stats_cb = widen_summary_dataframe(stats_cb, description='LabelValue', value='Mean', skip_first=True )
+  stats_pf = widen_summary_dataframe(stats_pf, description='LabelValue', value='Mean', skip_first=True, prefix='asl.perf.' )
+  stats_cb = widen_summary_dataframe(stats_cb, description='LabelValue', value='Mean', skip_first=True, prefix='asl.cbf.' )
 
   stats_pf = pd.concat( [stats_pf,stats_cb], axis=1, ignore_index=False )
+  
   if verbose:
       print("perfusion dataframe end")
 
@@ -629,7 +633,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
   dktseg = ants.apply_transforms( und, simg_labels,
     t1reg['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
   df_pet3d = ants.label_stats( und, dktseg )
-  stats_pet = widen_summary_dataframe(df_pet3d, description='LabelValue', value='Mean', skip_first=True )
+  stats_pet = widen_summary_dataframe(df_pet3d, description='LabelValue', value='Mean', skip_first=True, prefix='pet.' )
   if verbose:
       print("pet3d dataframe end")
       print( stats_pet )
@@ -705,8 +709,8 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
     famask = ants.threshold_image(dti['FA'],0.01,1.0)
     stats_fa = ants.label_stats(dti['FA'], dwilab * famask )
     stats_md = ants.label_stats(dti['MD'], dwilab * ants.threshold_image(dti['MD'],1e-9,1.0))
-    stats_fa = widen_summary_dataframe(stats_fa, description='LabelValue', value='Mean', skip_first=False )
-    stats_md = widen_summary_dataframe(stats_md, description='LabelValue', value='Mean', skip_first=False )
+    stats_fa = widen_summary_dataframe(stats_fa, description='LabelValue', value='Mean', skip_first=False, prefix='dwi.fa.' )
+    stats_md = widen_summary_dataframe(stats_md, description='LabelValue', value='Mean', skip_first=False, prefix='dwi.md.' )
 
     return antspymm.convert_np_in_dict( {'registered_dwi': dwireg['warpedfixout'], 'dwimean': dwimean, 
         'dwimask': dwimask,
@@ -1073,11 +1077,11 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   perafimg = antspymm.PerAF( simgimp, bmask )
 
   stats_alf = ants.label_stats(myfalff['alff'],rsflabels )
-  stats_alf = widen_summary_dataframe(stats_alf, description='LabelValue', value='Mean', skip_first=True )
+  stats_alf = widen_summary_dataframe(stats_alf, description='LabelValue', value='Mean', skip_first=True, prefix='rsf.alf.' )
   stats_flf = ants.label_stats(myfalff['falff'],rsflabels )
-  stats_flf = widen_summary_dataframe(stats_flf, description='LabelValue', value='Mean', skip_first=True )
+  stats_flf = widen_summary_dataframe(stats_flf, description='LabelValue', value='Mean', skip_first=True, prefix='rsf.flf.' )
   stats_prf = ants.label_stats(perafimg,rsflabels )
-  stats_prf = widen_summary_dataframe(stats_prf, description='LabelValue', value='Mean', skip_first=True )
+  stats_prf = widen_summary_dataframe(stats_prf, description='LabelValue', value='Mean', skip_first=True, prefix='rsf.prf.' )
 
   # structure the output data
   outdict = {}

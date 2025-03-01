@@ -43,13 +43,15 @@ if not "s" in globals():
     s = blindantspymm.structural( simg, simg_mask, template, template_mask, template_labels )
     s_labels = s['inverse_warped_labels']
     print( s['brain_mask_overlap'] )
+    print( s['label_geometry'] )
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
     rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(55,1000) )
     rsf = blindantspymm.rsfmri( rimgsub, simg, simg_mask, s_labels, verbose=True )
-
+    print( rsf['label_geometry'] )
+    
 if not "mypet" in globals():
     pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
     mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
