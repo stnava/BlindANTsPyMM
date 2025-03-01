@@ -212,7 +212,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
                    add_FD_to_nuisance=False,
                    segment_timeseries=False,
                    trim_the_mask=4.25,
-                   upsample=False,
+                   upsample=True,
                    perfusion_regression_model='linear',
                    verbose=False ):
   """
@@ -1075,4 +1075,4 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   outdict['minutes_original_data'] = ( tr * fmri.shape[3] ) / 60.0 # minutes of useful data
   outdict['minutes_censored_data'] = ( tr * simg.shape[3] ) / 60.0 # minutes of useful data
   outdict['correlation'] = mycmat
-  return convert_np_in_dict( outdict )
+  return antspymm.convert_np_in_dict( outdict )
