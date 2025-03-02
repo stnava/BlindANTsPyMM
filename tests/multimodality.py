@@ -42,6 +42,7 @@ if not "s" in globals():
     s_labels = s['labels']
     print( s['brain_mask_overlap'] )
     print( s['label_geometry'] )
+    print( 'struct:intermodality_similarity ' + str(s['intermodality_similarity'] ))
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "mypet" in globals():
@@ -49,8 +50,7 @@ if not "mypet" in globals():
     mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
     ants.image_write( mypet['registration_result']['warpedmovout'], '/tmp/x1pet.nii.gz' )
     ants.image_write( mypet['pet3d'], '/tmp/x0pet.nii.gz' )
-
-zonko
+    print( 'pet:intermodality_similarity ' + str(mypet['intermodality_similarity'] ))
 
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
@@ -59,6 +59,7 @@ if not "rsf" in globals(): # not implemented yet
     ants.image_write( rsf['registration_result']['warpedmovout'], '/tmp/x1rsf.nii.gz' )
     ants.image_write( rsf['fmri_template'], '/tmp/x0rsf.nii.gz' )
     print( rsf['correlation'] )
+    print( 'rsf:intermodality_similarity ' + str(rsf['intermodality_similarity'] ))
 
 
 if not "prf" in globals():
@@ -67,12 +68,14 @@ if not "prf" in globals():
     print(prf.keys())
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
+    print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
 
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
     ants.image_write( dti['registration_result']['warpedmovout'], '/tmp/x1dti.nii.gz' )
     ants.image_write( dti['dwimean'], '/tmp/x0dti.nii.gz' )
-
+    print( 'dti:intermodality_similarity ' + str(dti['intermodality_similarity'] ))
+###################
 import pandas as pd
 summary_df = pd.concat( [
    s['label_geometry'],     # ROI volumes

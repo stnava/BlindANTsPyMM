@@ -151,12 +151,16 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
     tbrain[ tbrain < 0. ] = 0.
     sbrain = simg * simg_mask
     sbrain[ sbrain < 0.0 ] = 0.0
+    ritbrain=ants.rank_intensity(tbrain)
+    risbrain=ants.rank_intensity(sbrain)
     reg = ants.registration(
-        fixed=tbrain,
-        moving=sbrain,
+        fixed=ritbrain,
+        moving=risbrain,
         type_of_transform=type_of_transform
     )
-    
+    #######
+    intermodality_similarity = ants.image_mutual_information( ritbrain, reg['warpedmovout'] )
+    #######
     inverse_warped_mask = ants.apply_transforms(
         fixed=simg,
         moving=template_mask,
@@ -196,7 +200,8 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         'registration_result': reg,
         'jacobian': jacobian,
         'label_geometry': label_geometry_measures_w,
-        'brain_mask_overlap':mydice
+        'brain_mask_overlap':mydice,
+        'intermodality_similarity': intermodality_similarity
     }
     return antspymm.convert_np_in_dict( outdict )
 
