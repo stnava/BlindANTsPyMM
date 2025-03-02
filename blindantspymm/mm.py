@@ -190,23 +190,22 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
             widen_summary_dataframe( label_geometry_measures, 
                 value='SurfaceAreaInMillimetersSquared') ], axis=1 )
     label_geometry_measures_w=label_geometry_measures_w.add_prefix("smri.")
-    return antspymm.convert_np_in_dict( {
-        'registration': reg,
-        'warped_image': reg['warpedmovout'],
-        'inverse_warped_mask': inverse_warped_mask,
-        'inverse_warped_labels': inverse_warped_labels,
-        'forward_transforms': reg['fwdtransforms'],
-        'inverse_transforms': reg['invtransforms'],
+    outdict = {
+        'brainmask': inverse_warped_mask,
+        'labels': inverse_warped_labels,
+        'registration_result': reg,
         'jacobian': jacobian,
         'label_geometry': label_geometry_measures_w,
         'brain_mask_overlap':mydice
-    } )
+    }
+    return antspymm.convert_np_in_dict( outdict )
 
 def perfusion( fmri, simg, simg_mask, simg_labels,
                    FD_threshold=0.5,
                    spa = (0., 0., 0., 0.),
                    nc = 3,
-                   type_of_transform='Rigid',
+                   type_of_intermodality_transform='SyN',
+                   type_of_motion_transform='Rigid',
                    tc='alternating',
                    n_to_trim=0,
                    m0_image = None,
@@ -238,7 +237,9 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
 
   nc  : number of components for compcor filtering
 
-  type_of_transform : SyN or Rigid
+  type_of_intermodality_transform : SyN or Rigid for mapping structure to this modality
+
+  type_of_motion_transform : SyN or Rigid for motion correction
 
   tc: string either alternating or split (default is alternating ie CTCTCT; split is CCCCTTTT)
 
@@ -327,9 +328,11 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   A = np.zeros((1,1))
   fmri_template = antspymm.get_average_rsf( fmri )
 #  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
-  fmri_template_fgd = fmri_template * ants.threshold_image( fmri_template, 'Otsu', 1)
   simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-  rig = ants.registration( fmri_template, simg_fgd, 'SyN' )
+  rig = ants.registration( fmri_template, simg_fgd, type_of_intermodality_transform,
+    syn_metric='cc',
+    syn_sampling=2,
+    reg_iterations=[40,20,10] )
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'], interpolator='genericLabel' )
   if m0_indices is None:
     if n_to_trim is None:
@@ -340,7 +343,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   perf_total_sigma = 1.5
   corrmo = antspymm.timeseries_reg(
     fmri, fmri_template,
-    type_of_transform=type_of_transform,
+    type_of_transform=type_of_motion_transform,
     total_sigma=perf_total_sigma,
     fdOffset=2.0,
     trim = mytrim,
@@ -397,7 +400,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
     interpolator='genericLabel' )
   corrmo = antspymm.timeseries_reg(
         fmri, fmri_template,
-        type_of_transform=type_of_transform,
+        type_of_transform=type_of_motion_transform,
         total_sigma=perf_total_sigma,
         fdOffset=2.0,
         trim = mytrim,
@@ -421,8 +424,6 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   fmrimotcorr=corrmo['motion_corrected']
   und = fmri_template * bmask
   t1 = simg * simg_mask
-#  t1reg = ants.registration( und, t1, "SyNBold" )
-  t1reg = rig # ants.registration( und, t1, "SyN" )
   compcorquantile=0.50
   mycompcor = ants.compcor( fmrimotcorr,
     ncompcor=nc, quantile=compcorquantile, mask = bmask,
@@ -528,33 +529,30 @@ Where:
 
   if verbose:
     print("perfimg.max() " + str(  perfimg.max() ) )
-  outdict = {}
-  outdict['meanBold'] = fmri_template
-  outdict['brainmask'] = bmask
-  rsfNuisance = pd.DataFrame( nuisance )
-  rsfNuisance['FD']=corrmo['FD']
-
   if verbose:
       print("perfusion dataframe begin")
   dktseg = ants.apply_transforms( und, simg_labels,
-    t1reg['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
-
+    rig['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
   stats_pf = ants.label_stats(perfimg,dktseg )
   stats_cb = ants.label_stats(cbf,dktseg )
   stats_pf = widen_summary_dataframe(stats_pf, description='LabelValue', value='Mean', skip_first=True, prefix='asl.perf.' )
   stats_cb = widen_summary_dataframe(stats_cb, description='LabelValue', value='Mean', skip_first=True, prefix='asl.cbf.' )
-
   stats_pf = pd.concat( [stats_pf,stats_cb], axis=1, ignore_index=False )
   
   if verbose:
       print("perfusion dataframe end")
 
+  outdict = {}
+  outdict['meanBold'] = fmri_template
+  outdict['brainmask'] = bmask
+  outdict['labels'] = dktseg
+  rsfNuisance = pd.DataFrame( nuisance )
+  rsfNuisance['FD']=corrmo['FD']
   outdict['perfusion']=perfimg
   outdict['cbf']=cbf
   outdict['m0']=m0
   outdict['label_mean']=stats_pf
   outdict['motion_corrected'] = corrmo['motion_corrected']
-  outdict['labels'] = dktseg
   outdict['nuisance'] = rsfNuisance
   outdict['tsnr'] = mytsnr
 #  outdict['ssnr'] = antspymm.slice_snr( corrmo['motion_corrected'], csfAndWM, gmseg )
@@ -565,7 +563,6 @@ Where:
   outdict['FD_mean'] = rsfNuisance['FD'].mean()
   outdict['FD_sd'] = rsfNuisance['FD'].std()
   outdict['bold_evr'] =  antspyt1w.patch_eigenvalue_ratio( und, 512, [16,16,16], evdepth = 0.9, mask = bmask )
-  outdict['t1reg'] = t1reg
   #  outdict['outlier_volumes']=hlinds
   # outdict['n_outliers']=len(hlinds)
   outdict['negative_voxels']=negative_voxels
@@ -575,11 +572,11 @@ Where:
     
 def pet( pet3d, simg, simg_mask, simg_labels,
                    spa = (0., 0., 0.),
-                   type_of_transform='Rigid',
+                   type_of_transform='BOLDRigid',
                    upsample=True,
                    verbose=False ):
   """
-  Estimate perfusion from a BOLD time series image.  Will attempt to figure out the T-C labels from the data.  The function uses defaults to quantify CBF but these will usually not be correct for your own data.  See the function calculate_CBF for an example of how one might do quantification based on the outputs of this function specifically the perfusion, m0 and mask images that are part of the output dictionary.
+  Summarize PET data by a (registration) transform of structural labels to the PET space.
 
   Arguments
   ---------
@@ -619,22 +616,21 @@ def pet( pet3d, simg, simg_mask, simg_labels,
       newspc = [minspc,minspc,minspc]
       pet3dr = ants.resample_image( pet3d, newspc, interp_type=0 )
 
-  rig = ants.registration( pet3dr, simg, 'BOLDRigid' )
+  rig = ants.registration( pet3dr, simg, type_of_transform )
   bmask = ants.apply_transforms( pet3dr, 
     simg_mask, 
-    rig['fwdtransforms'][0], 
+    rig['fwdtransforms'], 
     interpolator='genericLabel' )
   if verbose:
     print("End structural=>pet registration")
 
   und = pet3dr * bmask
-  t1reg = rig # ants.registration( und, t1, "Rigid" )
   if verbose:
     print("pet3dr.max() " + str(  pet3dr.max() ) )
   if verbose:
       print("pet3d dataframe begin")
   dktseg = ants.apply_transforms( und, simg_labels,
-    t1reg['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
+    rig['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
   df_pet3d = ants.label_stats( und, dktseg )
   stats_pet = widen_summary_dataframe(df_pet3d, description='LabelValue', value='Mean', skip_first=True, prefix='pet.' )
   if verbose:
@@ -645,7 +641,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
   outdict['pet3d'] = pet3dr
   outdict['brainmask'] = bmask
   outdict['labels'] = dktseg
-  outdict['t1reg'] = t1reg
+  outdict['registration_result'] = rig
   outdict['label_mean']=stats_pet
   return antspymm.convert_np_in_dict( outdict )
 
@@ -708,23 +704,26 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
         Dictionary containing registered DWI image and diffusion tensor imaging (DTI) results.
     """
     dwimean = ants.get_average_of_timeseries(dimg)
-    dwireg = antspymm.tra_initializer(simg, dwimean, n_simulations=32, max_rotation=30, transform=['rigid'], verbose=True)
-    dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['invtransforms'], whichtoinvert=[True], interpolator='genericLabel')
-    dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['invtransforms'], whichtoinvert=[True], interpolator='genericLabel')
-    dti = antspymm.dipy_dti_recon(dimg, dwibval, dwibvec, mask=dwimask)
-    
+    dwireg = reg( dwimean, simg )
+    dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['fwdtransforms'],
+        interpolator='genericLabel')
+    dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['fwdtransforms'],
+        interpolator='genericLabel')
+    dti = antspymm.dipy_dti_recon(dimg, dwibval, dwibvec, mask=dwimask)    
     famask = ants.threshold_image(dti['FA'],0.01,1.0)
     stats_fa = ants.label_stats(dti['FA'], dwilab * famask )
     stats_md = ants.label_stats(dti['MD'], dwilab * ants.threshold_image(dti['MD'],1e-9,1.0))
     stats_fa = widen_summary_dataframe(stats_fa, description='LabelValue', value='Mean', skip_first=False, prefix='dwi.fa.' )
     stats_md = widen_summary_dataframe(stats_md, description='LabelValue', value='Mean', skip_first=False, prefix='dwi.md.' )
-
-    return antspymm.convert_np_in_dict( {'registered_dwi': dwireg['warpedfixout'], 'dwimean': dwimean, 
-        'dwimask': dwimask,
-        'dwilab' :dwilab,
+    outdict = {
+        'dwimean': dwimean, 
+        'brainmask': dwimask,
+        'labels' : dwilab,
         'dti_results': dti, 
         'label_mean_fa': stats_fa,
-        'label_mean_md': stats_md} )
+        'label_mean_md': stats_md,
+        'registration_result': dwireg }
+    return antspymm.convert_np_in_dict( outdict )
 
 
 def rsfmri_to_correlation_matrix(rsfmri, roi_labels):
@@ -800,7 +799,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
     ica_components = 0,
     impute = True,
     censor = True,
-    despike = 2.5,
+    despike = 0.0,
     motion_as_nuisance = True,
     powers = False,
     upsample = 3.0,
@@ -877,7 +876,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   else:
     nc=float(nc)
 
-  type_of_transform='Rigid' # , # should probably not change this
+  type_of_motion_transform='Rigid' # , # should probably not change this
   remove_it=True
   output_directory = tempfile.mkdtemp()
   output_directory_w = output_directory + "/ts_t1_reg/"
@@ -889,9 +888,13 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   if verbose:
     print("rsf template")
   fmri_template = antspymm.get_average_rsf( fmri )
-  if verbose:
-    print("rsf template to structure registration")
-  rig = ants.registration( fmri_template, simg, 'SyN' )
+  rig0 = ants.registration( fmri_template, simg, 'BOLDRigid' )
+  simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+  rig = ants.registration( fmri_template, simg_fgd, 'SyNOnly',
+    syn_metric='cc',
+    syn_sampling=2,
+    reg_iterations=[20,10], initial_transform = rig0['fwdtransforms'] )
+
   if verbose:
     print("rsf template mask and labels")
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'], interpolator='genericLabel' )
@@ -977,7 +980,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   # mot-co
   corrmo = antspymm.timeseries_reg(
     fmri, fmri_template,
-    type_of_transform=type_of_transform,
+    type_of_transform=type_of_motion_transform,
     total_sigma=0.5,
     fdOffset=2.0,
     trim = 8,
@@ -990,7 +993,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   
   if verbose:
       print("End rsfmri motion correction")
-      print("=== next anatomically based mapping ===")
+      print("=== next despiking and correlations ===")
 
   despiking_count = np.zeros( corrmo['motion_corrected'].shape[3] )
   if despike > 0.0:
@@ -1089,11 +1092,10 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
 
   # structure the output data
   outdict = {}
-  outdict['upsampling'] = upsample
-  outdict['meanBold'] = und
   outdict['fmri_template'] = fmri_template
   outdict['brainmask'] = bmask
   outdict['labels'] = rsflabels
+  outdict['upsampling'] = upsample
   outdict['alff'] = myfalff['alff']
   outdict['falff'] = myfalff['falff']
   # add global mean and standard deviation for post-hoc z-scoring
@@ -1131,4 +1133,34 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   outdict['label_mean_alff'] = stats_alf
   outdict['label_mean_falff'] = stats_flf
   outdict['label_mean_peraf'] = stats_prf
+  outdict['registration_result']=rig
   return antspymm.convert_np_in_dict( outdict )
+
+
+def reg(fixed, moving):
+    """
+    Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
+
+    Parameters:
+    -----------
+    fixed : ANTsImage
+        The fixed image for registration.
+    moving : ANTsImage
+        The moving image for registration.
+    
+    Returns:
+    --------
+    dict
+        A dictionary containing the registration results from `antspymm.tra_initializer`.
+    
+    Notes:
+    ------
+    - Uses 32 simulations to initialize transformations.
+    - Allows a maximum rotation of 30 degrees.
+    - Applies a two-step transformation: rigid followed by symmetric normalization (SyN).
+    - Prints verbose output during execution.
+    """
+    return antspymm.tra_initializer(
+        fixed, moving, n_simulations=32, max_rotation=30, 
+        transform=['rigid', 'syn'], verbose=True )
+

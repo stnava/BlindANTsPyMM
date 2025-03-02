@@ -14,5 +14,7 @@ from .mm import template_based_labeling
 from .mm import widen_summary_dataframe
 from .mm import rsfmri_to_correlation_matrix
 from .mm import rsfmri_to_correlation_matrix_wide
+from .mm import reg
+
 
 
