@@ -214,7 +214,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
                    add_FD_to_nuisance=False,
                    segment_timeseries=False,
                    trim_the_mask=4.25,
-                   upsample=True,
+                   upsample=2.0,
                    perfusion_regression_model='linear',
                    verbose=False ):
   """
@@ -258,7 +258,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
 
   trim_the_mask : float >= 0 post-hoc method for trimming the mask
 
-  upsample: boolean
+  upsample: spacing to which we upsample the image (uniform); set to zero to skip
 
   perfusion_regression_model: string 'linear', 'ransac', 'theilsen', 'huber', 'quantile', 'sgd'; 'linear' and 'huber' are the only ones that work ok by default and are relatively quick to compute.
 
@@ -324,16 +324,24 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
     encoding_dict = {char: [1 if char == c else 0 for c in unique_chars] for char in unique_chars}
     encoded_matrix = np.array([encoding_dict[char] for char in char_list])
     return encoded_matrix
-  
+
+  if verbose:
+    print("rsf-perfusion registration")
   A = np.zeros((1,1))
+  if upsample > 0.:
+      spc = ants.get_spacing( fmri )
+      minspc = upsample
+      if min(spc[0:3]) < minspc:
+          minspc = min(spc[0:3])
+      newspc = [minspc,minspc,minspc, spc[3]]
+      fmri = ants.resample_image( fmri, newspc, interp_type=0 )
   fmri_template = antspymm.get_average_rsf( fmri )
-#  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
   simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-  rig = ants.registration( fmri_template, simg_fgd, type_of_intermodality_transform,
-    syn_metric='cc',
-    syn_sampling=2,
-    reg_iterations=[40,20,10] )
-  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'], interpolator='genericLabel' )
+  rig, intermodality_similarity = reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ] )
+  if verbose:
+    print("rsf-perfusion template mask and labels")
+  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
+  rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
   if m0_indices is None:
     if n_to_trim is None:
         n_to_trim=0
@@ -353,7 +361,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
     syn_sampling=2,
     reg_iterations=[40,20,5] )
   if verbose:
-      print("End rsfmri motion correction")
+      print("End rsfmri-perfusion motion correction")
 
   if m0_image is not None:
       m0 = m0_image
@@ -386,18 +394,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
 
   # redo template and registration at (potentially) upsampled scale
   fmri_template = ants.iMath( ants.get_average_of_timeseries( fmrimotcorr ), "Normalize" )
-  if upsample:
-      spc = ants.get_spacing( fmri )
-      minspc = 2.0
-      if min(spc[0:3]) < minspc:
-          minspc = min(spc[0:3])
-      newspc = [minspc,minspc,minspc]
-      fmri_template = ants.resample_image( fmri_template, newspc, interp_type=0 )
 
-  bmask = ants.apply_transforms( fmri_template, 
-    simg_mask, 
-    rig['fwdtransforms'], 
-    interpolator='genericLabel' )
   corrmo = antspymm.timeseries_reg(
         fmri, fmri_template,
         type_of_transform=type_of_motion_transform,
@@ -410,7 +407,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
         syn_sampling=2,
         reg_iterations=[40,20,5] )
   if verbose:
-        print("End 2nd rsfmri motion correction")
+        print("End 2nd rsfmri-perfusion motion correction")
 
   if outlier_threshold < 1.0 and outlier_threshold > 0.0:
     corrmo['motion_corrected'] = antspymm.remove_volumes_from_timeseries( corrmo['motion_corrected'], hlinds )
@@ -422,8 +419,6 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   # tsnrmask = ants.threshold_image( mytsnr, 0, mytsnrThresh ).morphology("close",3)
   # bmask = bmask * ants.iMath( tsnrmask, "FillHoles" )
   fmrimotcorr=corrmo['motion_corrected']
-  und = fmri_template * bmask
-  t1 = simg * simg_mask
   compcorquantile=0.50
   mycompcor = ants.compcor( fmrimotcorr,
     ncompcor=nc, quantile=compcorquantile, mask = bmask,
@@ -531,10 +526,8 @@ Where:
     print("perfimg.max() " + str(  perfimg.max() ) )
   if verbose:
       print("perfusion dataframe begin")
-  dktseg = ants.apply_transforms( und, simg_labels,
-    rig['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
-  stats_pf = ants.label_stats(perfimg,dktseg )
-  stats_cb = ants.label_stats(cbf,dktseg )
+  stats_pf = ants.label_stats(perfimg,rsflabels )
+  stats_cb = ants.label_stats(cbf,rsflabels )
   stats_pf = widen_summary_dataframe(stats_pf, description='LabelValue', value='Mean', skip_first=True, prefix='asl.perf.' )
   stats_cb = widen_summary_dataframe(stats_cb, description='LabelValue', value='Mean', skip_first=True, prefix='asl.cbf.' )
   stats_pf = pd.concat( [stats_pf,stats_cb], axis=1, ignore_index=False )
@@ -545,7 +538,7 @@ Where:
   outdict = {}
   outdict['meanBold'] = fmri_template
   outdict['brainmask'] = bmask
-  outdict['labels'] = dktseg
+  outdict['labels'] = rsflabels
   rsfNuisance = pd.DataFrame( nuisance )
   rsfNuisance['FD']=corrmo['FD']
   outdict['perfusion']=perfimg
@@ -562,18 +555,18 @@ Where:
   outdict['FD_max'] = rsfNuisance['FD'].max()
   outdict['FD_mean'] = rsfNuisance['FD'].mean()
   outdict['FD_sd'] = rsfNuisance['FD'].std()
-  outdict['bold_evr'] =  antspyt1w.patch_eigenvalue_ratio( und, 512, [16,16,16], evdepth = 0.9, mask = bmask )
-  #  outdict['outlier_volumes']=hlinds
-  # outdict['n_outliers']=len(hlinds)
+  outdict['bold_evr'] = antspyt1w.patch_eigenvalue_ratio( fmri_template, 512,
+    [16,16,16], evdepth = 0.9, mask = bmask )
   outdict['negative_voxels']=negative_voxels
   outdict['registration_result']=rig
+  outdict['intermodality_similarity'] = intermodality_similarity  
   return antspymm.convert_np_in_dict( outdict )
 
-    
+
 def pet( pet3d, simg, simg_mask, simg_labels,
                    spa = (0., 0., 0.),
                    type_of_transform='BOLDRigid',
-                   upsample=True,
+                   upsample=1.,
                    verbose=False ):
   """
   Summarize PET data by a (registration) transform of structural labels to the PET space.
@@ -593,7 +586,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
 
   type_of_transform : SyN or Rigid
 
-  upsample: boolean
+  upsample: spacing to which we upsample the image (set to zero to skip)
 
   verbose : boolean
 
@@ -608,30 +601,29 @@ def pet( pet3d, simg, simg_mask, simg_labels,
   import math
 
   pet3dr=pet3d
-  if upsample:
+  if upsample > 0.0:
       spc = ants.get_spacing( pet3d )
-      minspc = 1.0
+      minspc = upsample
       if min(spc) < minspc:
         minspc = min(spc)
       newspc = [minspc,minspc,minspc]
       pet3dr = ants.resample_image( pet3d, newspc, interp_type=0 )
 
-  rig = ants.registration( pet3dr, simg, type_of_transform )
-  bmask = ants.apply_transforms( pet3dr, 
-    simg_mask, 
-    rig['fwdtransforms'], 
-    interpolator='genericLabel' )
+  simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+  rig, intermodality_similarity = reg( simg_fgd, pet3dr )
+  if verbose:
+    print("rsf-perfusion template mask and labels")
+  bmask = ants.apply_transforms( pet3dr, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
+  petlabels = ants.apply_transforms( pet3dr, simg_labels, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
   if verbose:
     print("End structural=>pet registration")
 
   und = pet3dr * bmask
   if verbose:
-    print("pet3dr.max() " + str(  pet3dr.max() ) )
+    print("pet3dr.max() " + str(  und.max() ) )
   if verbose:
       print("pet3d dataframe begin")
-  dktseg = ants.apply_transforms( und, simg_labels,
-    rig['fwdtransforms'], interpolator = 'genericLabel' ) * bmask
-  df_pet3d = ants.label_stats( und, dktseg )
+  df_pet3d = ants.label_stats( und, petlabels )
   stats_pet = widen_summary_dataframe(df_pet3d, description='LabelValue', value='Mean', skip_first=True, prefix='pet.' )
   if verbose:
       print("pet3d dataframe end")
@@ -640,9 +632,10 @@ def pet( pet3d, simg, simg_mask, simg_labels,
   outdict = {}
   outdict['pet3d'] = pet3dr
   outdict['brainmask'] = bmask
-  outdict['labels'] = dktseg
+  outdict['labels'] = petlabels
   outdict['registration_result'] = rig
   outdict['label_mean']=stats_pet
+  outdict['intermodality_similarity'] = intermodality_similarity
   return antspymm.convert_np_in_dict( outdict )
 
 
@@ -704,10 +697,10 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
         Dictionary containing registered DWI image and diffusion tensor imaging (DTI) results.
     """
     dwimean = ants.get_average_of_timeseries(dimg)
-    dwireg = reg( dwimean, simg )
-    dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['fwdtransforms'],
+    dwireg, intermodality_similarity = reg( simg, dwimean, transform_list=['Rigid'] )
+    dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['invtransforms'],
         interpolator='genericLabel')
-    dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['fwdtransforms'],
+    dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['invtransforms'],
         interpolator='genericLabel')
     dti = antspymm.dipy_dti_recon(dimg, dwibval, dwibvec, mask=dwimask)    
     famask = ants.threshold_image(dti['FA'],0.01,1.0)
@@ -722,7 +715,8 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
         'dti_results': dti, 
         'label_mean_fa': stats_fa,
         'label_mean_md': stats_md,
-        'registration_result': dwireg }
+        'registration_result': dwireg,
+        'intermodality_similarity': intermodality_similarity }
     return antspymm.convert_np_in_dict( outdict )
 
 
@@ -887,26 +881,20 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
 # Assuming core and utils are modules or packages with necessary functions
   if verbose:
     print("rsf template")
-  fmri_template = antspymm.get_average_rsf( fmri )
-  rig0 = ants.registration( fmri_template, simg, 'BOLDRigid' )
-  simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-  rig = ants.registration( fmri_template, simg_fgd, 'SyNOnly',
-    syn_metric='cc',
-    syn_sampling=2,
-    reg_iterations=[20,10], initial_transform = rig0['fwdtransforms'] )
-
-  if verbose:
-    print("rsf template mask and labels")
-  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'], interpolator='genericLabel' )
-  rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['fwdtransforms'], interpolator='genericLabel' )
-
-  if upsample > 0.0:
+  if upsample > 0.:
       spc = ants.get_spacing( fmri )
       minspc = upsample
-      if min(spc[0:3]) < minspc:
+      if min(spc[0:3]) < upsample:
           minspc = min(spc[0:3])
-      newspc = [minspc,minspc,minspc]
-      fmri_template = ants.resample_image( fmri_template, newspc, interp_type=0 )
+      newspc = [minspc,minspc,minspc, spc[3]]
+      fmri = ants.resample_image( fmri, newspc, interp_type=0 )
+  fmri_template = antspymm.get_average_rsf( fmri )
+  simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+  rig, intermodality_similarity = reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ] )
+  if verbose:
+    print("rsf template mask and labels")
+  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
+  rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
 
   def temporal_derivative_same_shape(array):
     """
@@ -1134,10 +1122,11 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   outdict['label_mean_falff'] = stats_flf
   outdict['label_mean_peraf'] = stats_prf
   outdict['registration_result']=rig
+  outdict['intermodality_similarity'] = intermodality_similarity
   return antspymm.convert_np_in_dict( outdict )
 
 
-def reg(fixed, moving):
+def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32 ):
     """
     Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
 
@@ -1147,6 +1136,9 @@ def reg(fixed, moving):
         The fixed image for registration.
     moving : ANTsImage
         The moving image for registration.
+    transform_list: list of strings
+    max_rotation : float
+    n_simulations : int
     
     Returns:
     --------
@@ -1160,7 +1152,89 @@ def reg(fixed, moving):
     - Applies a two-step transformation: rigid followed by symmetric normalization (SyN).
     - Prints verbose output during execution.
     """
-    return antspymm.tra_initializer(
-        fixed, moving, n_simulations=32, max_rotation=30, 
-        transform=['rigid', 'syn'], verbose=True )
+#    return reg_initializer(
+#        ants.rank_intensity(fixed), ants.rank_intensity(moving), 
+#        n_simulations=n_simulations, max_rotation=max_rotation, 
+#        transform=transform_list, verbose=True )
+    rifi = ants.rank_intensity(fixed)
+    rimi = ants.rank_intensity(moving)
+    reginit = reg_initializer( rifi, rimi,
+        n_simulations=n_simulations, max_rotation=max_rotation, 
+        transform=transform_list, verbose=True )
+    myreg = ants.registration( rifi, rimi, 
+        'SyNOnly', intial_transform=reginit['fwdtransforms'][0], 
+        syn_sampling=2, sym_metric='cc' )
+    return myreg, ants.image_mutual_information( rifi, myreg['warpedmovout'] )
 
+
+def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
+    transform=['rigid'], compreg=None, verbose=False ):
+    """
+    multi-start multi-transform registration solution - based on ants.registration
+
+    fixed: fixed image
+
+    moving: moving image
+
+    n_simulations : number of simulations
+
+    max_rotation : maximum rotation angle
+
+    transform : list of transforms to loop through
+
+    compreg : registration results against which to compare
+
+    verbose : boolean
+
+    """
+    if True:
+        output_directory = tempfile.mkdtemp()
+        output_directory_w = output_directory + "/tra_reg/"
+        os.makedirs(output_directory_w,exist_ok=True)
+        bestmi = math.inf
+        bestvar = 0.0
+        myorig = list(ants.get_origin( fixed ))
+        mymax = 0;
+        for k in range(len( myorig ) ):
+            if abs(myorig[k]) > mymax:
+                mymax = abs(myorig[k])
+        maxtrans = mymax * 0.05
+        if compreg is None:
+            bestreg=ants.registration( fixed,moving,'Translation',
+                outprefix=output_directory_w+"trans")
+            initx = ants.read_transform( bestreg['fwdtransforms'][0] )
+        else :
+            bestreg=compreg
+            initx = ants.read_transform( bestreg['fwdtransforms'][0] )
+        for regtx in transform:
+            with tempfile.NamedTemporaryFile(suffix='.h5') as tp:
+                rRotGenerator = ants.contrib.RandomRotate3D( ( max_rotation*(-1.0), max_rotation ), reference=fixed )
+                for k in range(n_simulations):
+                    simtx = ants.compose_ants_transforms( [rRotGenerator.transform(), initx] )
+                    ants.write_transform( simtx, tp.name )
+                    if k > 0:
+                        reg = ants.registration( fixed, moving, regtx,
+                            initial_transform=tp.name,
+                            outprefix=output_directory_w+"reg"+str(k),
+                            verbose=False )
+                    else:
+                        reg = ants.registration( fixed, moving,
+                            regtx,
+                            outprefix=output_directory_w+"reg"+str(k),
+                            verbose=False )
+                    mymi = math.inf
+                    temp = reg['warpedmovout']
+                    myvar = temp.numpy().var()
+                    if verbose:
+                        print( str(k) + " : " + regtx  + " : _var_ " + str( myvar ) )
+                    if myvar > 0 :
+                        mymi = ants.image_mutual_information( fixed, temp )
+                        if mymi < bestmi:
+                            if verbose:
+                                print( "mi @ " + str(k) + " : " + str(mymi), flush=True)
+                            bestmi = mymi
+                            bestreg = reg
+                            bestvar = myvar
+        if bestvar == 0.0 and compreg is not None:
+            return compreg        
+        return bestreg

@@ -7,7 +7,7 @@ import random        #
 import blindantspymm #
 random.seed(42)  # Any fixed integer seed
 ddir = tdir = "/Users/stnava/Downloads/Ferret/"
-num='040'
+num='053'
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
@@ -44,6 +44,14 @@ if not "s" in globals():
     print( s['label_geometry'] )
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
+if not "mypet" in globals():
+    pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
+    mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
+    ants.image_write( mypet['registration_result']['warpedmovout'], '/tmp/x1pet.nii.gz' )
+    ants.image_write( mypet['pet3d'], '/tmp/x0pet.nii.gz' )
+
+zonko
+
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
     rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(50,1000) )
@@ -59,12 +67,6 @@ if not "prf" in globals():
     print(prf.keys())
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
-
-if not "mypet" in globals():
-    pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
-    mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
-    ants.image_write( mypet['registration_result']['warpedmovout'], '/tmp/x1pet.nii.gz' )
-    ants.image_write( mypet['pet3d'], '/tmp/x0pet.nii.gz' )
 
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
