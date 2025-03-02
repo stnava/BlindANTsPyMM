@@ -686,7 +686,7 @@ def template_based_labeling(template, template_mask, prior_template, prior_templ
         'registration_result' : prior_templatereg }
 
 
-def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
+def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec, upsample=0. ):
     """
     Perform diffusion-weighted imaging (DWI) registration and reconstruction.
 
@@ -703,11 +703,19 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
         B-value file.
     dwibvec : str
         B-vector file.
+    upsample : float optionally isotropically upsample data to upsample (the parameter value) in mm during the registration process if data is below that resolution; if the input spacing is less than that provided by the user, the data will simply be resampled to isotropic resolution
 
     Returns:
     dict
         Dictionary containing registered DWI image and diffusion tensor imaging (DTI) results.
     """
+    if upsample > 0.:
+        spc = ants.get_spacing( dimg )
+        minspc = upsample
+        if min(spc[0:3]) < upsample:
+            minspc = min(spc[0:3])
+        newspc = [minspc,minspc,minspc, spc[3]]
+        dimg = ants.resample_image( dimg, newspc, interp_type=0 )
     dwimean = ants.get_average_of_timeseries(dimg)
     dwireg, intermodality_similarity = reg( simg, dwimean, transform_list=['Rigid'] )
     dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['invtransforms'],

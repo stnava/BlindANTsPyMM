@@ -80,7 +80,7 @@ if not "rsf" in globals(): # not implemented yet
     print( 'rsf:intermodality_similarity ' + str(rsf['intermodality_similarity'] ))
 
 if not "dti" in globals():
-    dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
+    dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec, upsample=1.0 )
     ants.image_write( dti['registration_result']['warpedmovout'], '/tmp/x1dti.nii.gz' )
     ants.image_write( dti['dwimean'], '/tmp/x0dti.nii.gz' )
     print( 'dti:intermodality_similarity ' + str(dti['intermodality_similarity'] ))
