@@ -5,9 +5,10 @@ import curvanato     #
 import re            #
 import random        #
 import blindantspymm #
+import pandas as pd  #
 random.seed(42)  # Any fixed integer seed
 ddir = tdir = "/Users/stnava/Downloads/Ferret/"
-num='053'
+num=['053','040', '012', '044'][0]
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
@@ -45,6 +46,19 @@ if not "s" in globals():
     print( 'struct:intermodality_similarity ' + str(s['intermodality_similarity'] ))
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
+if not "prf" in globals():
+#    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
+#        tc='alternating', verbose=True )
+    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
+        tc='non', verbose=True )
+    print(prf.keys())
+    ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
+    ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
+    print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
+    mydf=pd.DataFrame( ants.timeseries_to_matrix(pfimg, prf['brainmask'] ) )
+    mydf.to_csv("/tmp/mat2.csv")
+    prf['nuisance'].to_csv("/tmp/nuis.csv")
+
 if not "mypet" in globals():
     pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
     mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
@@ -61,14 +75,6 @@ if not "rsf" in globals(): # not implemented yet
     print( rsf['correlation'] )
     print( 'rsf:intermodality_similarity ' + str(rsf['intermodality_similarity'] ))
 
-
-if not "prf" in globals():
-    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
-        tc='alternating', verbose=True )
-    print(prf.keys())
-    ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
-    ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
-    print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
 
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )

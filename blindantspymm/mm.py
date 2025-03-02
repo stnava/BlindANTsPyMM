@@ -424,7 +424,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   # tsnrmask = ants.threshold_image( mytsnr, 0, mytsnrThresh ).morphology("close",3)
   # bmask = bmask * ants.iMath( tsnrmask, "FillHoles" )
   fmrimotcorr=corrmo['motion_corrected']
-  compcorquantile=0.50
+  compcorquantile=0.90
   mycompcor = ants.compcor( fmrimotcorr,
     ncompcor=nc, quantile=compcorquantile, mask = bmask,
     filter_type='polynomial', degree=2 )
@@ -545,7 +545,8 @@ Where:
   outdict['brainmask'] = bmask
   outdict['labels'] = rsflabels
   rsfNuisance = pd.DataFrame( nuisance )
-  rsfNuisance['FD']=corrmo['FD']
+  if not add_FD_to_nuisance:
+    rsfNuisance['FD']=corrmo['FD']
   outdict['perfusion']=perfimg
   outdict['cbf']=cbf
   outdict['m0']=m0
