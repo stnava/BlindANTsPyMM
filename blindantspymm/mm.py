@@ -211,7 +211,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
                    n_to_trim=0,
                    m0_image = None,
                    m0_indices=None,
-                   outlier_threshold=0.250,
+                   outlier_threshold=0.,
                    add_FD_to_nuisance=False,
                    segment_timeseries=False,
                    trim_the_mask=4.25,
@@ -325,9 +325,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
     return encoded_matrix
   
   A = np.zeros((1,1))
-  fmri_template, hlinds = antspymm.loop_timeseries_censoring( fmri, 0.10 )
-  fmri_template = ants.get_average_of_timeseries( fmri_template )
-  del hlinds
+  fmri_template = antspymm.get_average_rsf( fmri )
   rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'][0], interpolator='genericLabel' )
   if m0_indices is None:
@@ -415,13 +413,14 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
 
   regression_mask = bmask.clone()
   mytsnr = antspymm.tsnr( corrmo['motion_corrected'], bmask )
-  mytsnrThresh = np.quantile( mytsnr.numpy(), 0.995 )
-  tsnrmask = ants.threshold_image( mytsnr, 0, mytsnrThresh ).morphology("close",3)
-  bmask = bmask * ants.iMath( tsnrmask, "FillHoles" )
+  # mytsnrThresh = np.quantile( mytsnr.numpy(), 0.995 )
+  # tsnrmask = ants.threshold_image( mytsnr, 0, mytsnrThresh ).morphology("close",3)
+  # bmask = bmask * ants.iMath( tsnrmask, "FillHoles" )
   fmrimotcorr=corrmo['motion_corrected']
   und = fmri_template * bmask
   t1 = simg * simg_mask
-  t1reg = ants.registration( und, t1, "SyNBold" )
+#  t1reg = ants.registration( und, t1, "SyNBold" )
+  t1reg = ants.registration( und, t1, "SyN" )
   compcorquantile=0.50
   mycompcor = ants.compcor( fmrimotcorr,
     ncompcor=nc, quantile=compcorquantile, mask = bmask,
@@ -430,6 +429,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   simg = ants.smooth_image(fmrimotcorr, spa, sigma_in_physical_coordinates = True )
   nuisance = mycompcor['basis']
   nuisance = np.c_[ nuisance, mycompcor['components'] ]
+  nuisance = mycompcor['components']
   if add_FD_to_nuisance:
     nuisance = np.c_[ nuisance, corrmo['FD'] ]
   if verbose:
@@ -527,7 +527,7 @@ Where:
   if verbose:
     print("perfimg.max() " + str(  perfimg.max() ) )
   outdict = {}
-  outdict['meanBold'] = und
+  outdict['meanBold'] = fmri_template
   outdict['brainmask'] = bmask
   rsfNuisance = pd.DataFrame( nuisance )
   rsfNuisance['FD']=corrmo['FD']
@@ -552,7 +552,7 @@ Where:
   outdict['m0']=m0
   outdict['label_mean']=stats_pf
   outdict['motion_corrected'] = corrmo['motion_corrected']
-  outdict['brain_mask'] = bmask
+  outdict['labels'] = dktseg
   outdict['nuisance'] = rsfNuisance
   outdict['tsnr'] = mytsnr
 #  outdict['ssnr'] = antspymm.slice_snr( corrmo['motion_corrected'], csfAndWM, gmseg )
@@ -564,8 +564,8 @@ Where:
   outdict['FD_sd'] = rsfNuisance['FD'].std()
   outdict['bold_evr'] =  antspyt1w.patch_eigenvalue_ratio( und, 512, [16,16,16], evdepth = 0.9, mask = bmask )
   outdict['t1reg'] = t1reg
-  outdict['outlier_volumes']=hlinds
-  outdict['n_outliers']=len(hlinds)
+  #  outdict['outlier_volumes']=hlinds
+  # outdict['n_outliers']=len(hlinds)
   outdict['negative_voxels']=negative_voxels
   return antspymm.convert_np_in_dict( outdict )
 

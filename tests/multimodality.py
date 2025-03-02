@@ -46,22 +46,36 @@ if not "s" in globals():
     print( s['label_geometry'] )
     ants.plot( simg * simg_mask, s_labels, crop=True )
 
-if not "rsf" in globals(): # not implemented yet
-    print("Begin rsf")
-    rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(55,1000) )
-    rsf = blindantspymm.rsfmri( rimgsub, simg, simg_mask, s_labels, verbose=True )
-    print( rsf['correlation'] )
+if not "prf" in globals():
+    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
+        tc='other', verbose=True )
+    print(prf.keys())
 
 if not "mypet" in globals():
     pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
     mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
 
-if not "prf" in globals():
-    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=1,
-        verbose=True )
-    print(prf.keys())
-
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
 
+if not "rsf" in globals(): # not implemented yet
+    print("Begin rsf")
+    rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(55,1000) )
+    rsf = blindantspymm.rsfmri( rimg, simg, simg_mask, s_labels, verbose=True )
+    print( rsf['correlation'] )
 
+
+import pandas as pd
+summary_df = pd.concat( [
+   s['label_geometry'],     # ROI volumes
+   prf['label_mean'],       # ROI perfusion and cbf
+   mypet['label_mean'],     # ROI mean PET values
+   dti['label_mean_fa'],    # ROI FA mean
+   dti['label_mean_md'],    # ROI MD mean
+   rsf['label_mean_alff'],  # alff, falff and peraf
+   rsf['label_mean_falff'], #
+   rsf['label_mean_peraf'], ##################################
+   rsf['correlation'] ], axis=1 ) # ROI correlations at rest #
+##############################################################
+summary_df.to_csv( "/tmp/temp.csv" )
+##############################################################
