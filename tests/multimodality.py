@@ -8,7 +8,7 @@ import blindantspymm #
 import pandas as pd  #
 random.seed(42)  # Any fixed integer seed
 ddir = tdir = "/Users/stnava/Downloads/Ferret/"
-num=['053','040', '012', '044'][3]
+num=['053','040', '012', '044'][1]
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
@@ -55,8 +55,6 @@ if not "mypet" in globals():
     ants.image_write( mypet['registration_result']['warpedfixout'], '/tmp/x1pet.nii.gz' )
     ants.image_write( mypet['pet_resam'], '/tmp/x0pet.nii.gz' )
     print( 'pet:intermodality_similarity ' + str(mypet['intermodality_similarity'] ))
-
-deek
 
 if not "prf" in globals():
 #    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
