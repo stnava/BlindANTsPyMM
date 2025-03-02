@@ -161,7 +161,7 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         fixed=simg,
         moving=template_mask,
         transformlist=reg['invtransforms'],
-        interpolator='nearestNeighbor'
+        interpolator='genericLabel'
     )
 
     # for QC purposes
@@ -172,7 +172,7 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         fixed=simg,
         moving=template_labels,
         transformlist=reg['invtransforms'],
-        interpolator='nearestNeighbor'
+        interpolator='genericLabel'
     )
     
     # Compute the Jacobian determinant of the transformation
@@ -674,8 +674,8 @@ def template_based_labeling(template, template_mask, prior_template, prior_templ
     timgbc = ants.resample_image(timgbc, resample_params=[spc] * timgbc.dimension)    
     zz = ants.affine_initializer(timgbc, prior_template, search_factor=200, radian_fraction=2, use_principal_axis=True, local_search_iterations=20)
     prior_templatereg = ants.registration(timgbc, prior_template, type_of_transform, initial_transform=zz)
-    prior_templatelab = ants.apply_transforms(timgbc, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='nearestNeighbor')
-    prior_templatelab_og = ants.apply_transforms(template, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='nearestNeighbor')
+    prior_templatelab = ants.apply_transforms(timgbc, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='genericLabel')
+    prior_templatelab_og = ants.apply_transforms(template, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='genericLabel')
     return {'transformed_template': timgbc, 
         'transformed_labels': prior_templatelab, 
         'transformed_labels_orig_space': prior_templatelab_og, 
@@ -706,8 +706,8 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
     """
     dwimean = ants.get_average_of_timeseries(dimg)
     dwireg = antspymm.tra_initializer(simg, dwimean, n_simulations=32, max_rotation=30, transform=['rigid'], verbose=True)
-    dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['invtransforms'], whichtoinvert=[True], interpolator='nearestNeighbor')
-    dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['invtransforms'], whichtoinvert=[True], interpolator='nearestNeighbor')
+    dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['invtransforms'], whichtoinvert=[True], interpolator='genericLabel')
+    dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['invtransforms'], whichtoinvert=[True], interpolator='genericLabel')
     dti = antspymm.dipy_dti_recon(dimg, dwibval, dwibvec, mask=dwimask)
     
     famask = ants.threshold_image(dti['FA'],0.01,1.0)
