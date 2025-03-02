@@ -52,3 +52,22 @@ https://github.com/stnava/BlindANTsPyMM/blob/main/tests/multimodality.py
 
 
 ```
+
+
+things to write out 
+
+```python
+summary_df = pd.concat( [
+   s['label_geometry'],
+   prf['label_mean'],
+   mypet['label_mean'],
+   dti['label_mean_fa'],
+   dti['label_mean_md'],
+   rsf['label_mean_alff'],
+   rsf['label_mean_falff'],
+   rsf['label_mean_peraf'],
+   rsf['correlation'] ], axis=1 )
+```
+
+eventually will provide `write_qc` and `write_roi_summary` functions 
+that formalize the output style.
