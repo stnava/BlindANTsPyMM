@@ -1,14 +1,14 @@
 ######################
-import blindantspymm #
 import ants          #
 import antspymm      #
 import curvanato     #
 import re            #
 import random        #
+import blindantspymm #
 random.seed(42)  # Any fixed integer seed
 tdir = "/Users/stnava/Downloads/Ferret/"
-ddir = "/Users/stnava/Downloads/Ferret2/"
-num='012'
+ddir = "/Users/stnava/Downloads/Ferret/"
+num='010'
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
@@ -21,7 +21,6 @@ dwibvec = re.sub( 'nii.gz' , 'bvec' , dwifn )
 dimg = ants.image_read( dwifn )
 template = ants.image_read( tdir + 'TemplateT1/S_template0.nii.gz' )
 template_mask = ants.image_read( tdir + 'TemplateT1/S_template0_mask.nii.gz' )
-
 ptem = ants.image_read( tdir + './FerretTemplate/evDTI/evDTI_template_FA.nii' )
 # ptem = ants.image_read( tdir + './FerretTemplate/evT2/evT2_template.nii' )
 ptemlab0 = ants.image_read( tdir + './FerretTemplate/evDTI/AtlasMasks/evDTI_SEGMENTATION.nii' )
@@ -58,7 +57,8 @@ if not "mypet" in globals():
     mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
 
 if not "prf" in globals():
-    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, verbose=True )
+    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=1,
+        verbose=True )
     print(prf.keys())
 
 if not "dti" in globals():

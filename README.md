@@ -57,6 +57,7 @@ https://github.com/stnava/BlindANTsPyMM/blob/main/tests/multimodality.py
 things to write out 
 
 ```python
+import pandas as pd
 summary_df = pd.concat( [
    s['label_geometry'],
    prf['label_mean'],
