@@ -7,8 +7,8 @@ import random        #
 import blindantspymm #
 random.seed(42)  # Any fixed integer seed
 tdir = "/Users/stnava/Downloads/Ferret/"
-ddir = "/Users/stnava/Downloads/Ferret/"
-num='010'
+ddir = "/Users/stnava/Downloads/Ferret2/"
+num='012'
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
@@ -44,7 +44,7 @@ if not "s" in globals():
     s_labels = s['inverse_warped_labels']
     print( s['brain_mask_overlap'] )
     print( s['label_geometry'] )
-    ants.plot( simg * simg_mask, s_labels, crop=True )
+#    ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "prf" in globals():
     prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,

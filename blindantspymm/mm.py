@@ -326,8 +326,11 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   
   A = np.zeros((1,1))
   fmri_template = antspymm.get_average_rsf( fmri )
-  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
-  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'][0], interpolator='genericLabel' )
+#  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
+  fmri_template_fgd = fmri_template * ants.threshold_image( fmri_template, 'Otsu', 1)
+  simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+  rig = ants.registration( fmri_template, simg_fgd, 'SyN' )
+  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'], interpolator='genericLabel' )
   if m0_indices is None:
     if n_to_trim is None:
         n_to_trim=0
@@ -388,10 +391,9 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
       newspc = [minspc,minspc,minspc]
       fmri_template = ants.resample_image( fmri_template, newspc, interp_type=0 )
 
-  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
   bmask = ants.apply_transforms( fmri_template, 
     simg_mask, 
-    rig['fwdtransforms'][0], 
+    rig['fwdtransforms'], 
     interpolator='genericLabel' )
   corrmo = antspymm.timeseries_reg(
         fmri, fmri_template,
@@ -420,7 +422,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   und = fmri_template * bmask
   t1 = simg * simg_mask
 #  t1reg = ants.registration( und, t1, "SyNBold" )
-  t1reg = ants.registration( und, t1, "SyN" )
+  t1reg = rig # ants.registration( und, t1, "SyN" )
   compcorquantile=0.50
   mycompcor = ants.compcor( fmrimotcorr,
     ncompcor=nc, quantile=compcorquantile, mask = bmask,
@@ -567,6 +569,7 @@ Where:
   #  outdict['outlier_volumes']=hlinds
   # outdict['n_outliers']=len(hlinds)
   outdict['negative_voxels']=negative_voxels
+  outdict['registration_result']=rig
   return antspymm.convert_np_in_dict( outdict )
 
     
@@ -888,14 +891,11 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   fmri_template = antspymm.get_average_rsf( fmri )
   if verbose:
     print("rsf template to structure registration")
-  rig = ants.registration( fmri_template, simg, 'BOLDRigid' )
+  rig = ants.registration( fmri_template, simg, 'SyN' )
   if verbose:
     print("rsf template mask and labels")
-  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'][0], interpolator='genericLabel' )
-  rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['fwdtransforms'][0], interpolator='genericLabel' )
-#  if verbose:
-#    ants.plot( fmri_template, bmask, crop=True )
-#    ants.plot( fmri_template, rsflabels, crop=True )
+  bmask = ants.apply_transforms( fmri_template, simg_mask, rig['fwdtransforms'], interpolator='genericLabel' )
+  rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['fwdtransforms'], interpolator='genericLabel' )
 
   if upsample > 0.0:
       spc = ants.get_spacing( fmri )
