@@ -678,7 +678,8 @@ def template_based_labeling(template, template_mask, prior_template, prior_templ
     prior_templatelab_og = ants.apply_transforms(template, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='nearestNeighbor')
     return {'transformed_template': timgbc, 
         'transformed_labels': prior_templatelab, 
-        'transformed_labels_orig_space': prior_templatelab_og}
+        'transformed_labels_orig_space': prior_templatelab_og, 
+        'registration_result' : prior_templatereg }
 
 
 def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):
