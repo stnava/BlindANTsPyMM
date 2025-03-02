@@ -58,6 +58,7 @@ if not "prf" in globals():
     mydf=pd.DataFrame( ants.timeseries_to_matrix(pfimg, prf['brainmask'] ) )
     mydf.to_csv("/tmp/mat2.csv")
     prf['nuisance'].to_csv("/tmp/nuis.csv")
+    ants.image_write( prf['cbf'], '/tmp/tempcbf.nii.gz' )
 
 if not "mypet" in globals():
     pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
