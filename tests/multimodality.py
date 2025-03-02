@@ -8,11 +8,15 @@ import blindantspymm #
 import pandas as pd  #
 random.seed(42)  # Any fixed integer seed
 ddir = tdir = "/Users/stnava/Downloads/Ferret/"
-num=['053','040', '012', '044'][0]
+num=['053','040', '012', '044'][3]
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
 pfimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/perf/sub-PTCRA'+num+'_run-001_perf.nii.gz' )
+
+# ./NiftiPET//sub-PTCRA044/ses-72HRPET/pet/sub-PTCRA044_run-001_pet.nii.gz &
+ptimg = ants.image_read( ddir + 'NiftiPET/sub-PTCRA'+num+'/ses-72HRPET/pet/sub-PTCRA'+num+'_run-001_pet.nii.gz' )
+
 
 dwifn = ddir + 'NiftiMRI/sub-PTCRA'+num+'/dwi/sub-PTCRA'+num+'_run-001_dti.nii.gz'
 dwibval = re.sub( 'nii.gz' , 'bval' , dwifn )
@@ -46,6 +50,14 @@ if not "s" in globals():
     print( 'struct:intermodality_similarity ' + str(s['intermodality_similarity'] ))
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
+if not "mypet" in globals():
+    mypet = blindantspymm.pet( ptimg, simg, simg_mask, s_labels, verbose=True )
+    ants.image_write( mypet['registration_result']['warpedfixout'], '/tmp/x1pet.nii.gz' )
+    ants.image_write( mypet['pet_resam'], '/tmp/x0pet.nii.gz' )
+    print( 'pet:intermodality_similarity ' + str(mypet['intermodality_similarity'] ))
+
+deek
+
 if not "prf" in globals():
 #    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
 #        tc='alternating', verbose=True )
@@ -60,13 +72,6 @@ if not "prf" in globals():
     prf['nuisance'].to_csv("/tmp/nuis.csv")
     ants.image_write( prf['cbf'], '/tmp/tempcbf.nii.gz' )
 
-if not "mypet" in globals():
-    pet3d = ants.get_average_of_timeseries( pfimg )  # this is a placeholder
-    mypet = blindantspymm.pet( pet3d, simg, simg_mask, s_labels, verbose=True )
-    ants.image_write( mypet['registration_result']['warpedmovout'], '/tmp/x1pet.nii.gz' )
-    ants.image_write( mypet['pet3d'], '/tmp/x0pet.nii.gz' )
-    print( 'pet:intermodality_similarity ' + str(mypet['intermodality_similarity'] ))
-
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
     rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(50,1000) )
@@ -76,12 +81,12 @@ if not "rsf" in globals(): # not implemented yet
     print( rsf['correlation'] )
     print( 'rsf:intermodality_similarity ' + str(rsf['intermodality_similarity'] ))
 
-
 if not "dti" in globals():
     dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec )
     ants.image_write( dti['registration_result']['warpedmovout'], '/tmp/x1dti.nii.gz' )
     ants.image_write( dti['dwimean'], '/tmp/x0dti.nii.gz' )
     print( 'dti:intermodality_similarity ' + str(dti['intermodality_similarity'] ))
+
 ###################
 import pandas as pd
 summary_df = pd.concat( [

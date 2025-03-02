@@ -573,6 +573,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
                    spa = (0., 0., 0.),
                    type_of_transform='BOLDRigid',
                    upsample=1.,
+                   reorient=True,
                    verbose=False ):
   """
   Summarize PET data by a (registration) transform of structural labels to the PET space.
@@ -594,6 +595,8 @@ def pet( pet3d, simg, simg_mask, simg_labels,
 
   upsample: spacing to which we upsample the image (set to zero to skip)
 
+  reorient: boolean to allow reorientation
+
   verbose : boolean
 
   Returns
@@ -605,20 +608,23 @@ def pet( pet3d, simg, simg_mask, simg_labels,
   import pandas as pd
   import re
   import math
-
-  pet3dr=pet3d
+  pet3dr=ants.image_clone(pet3d)
+  if reorient:
+    # take care of the (potential) orientation issues
+    pet3dr=ants.reorient_image2( pet3d, ants.get_orientation(simg) )
   if upsample > 0.0:
-      spc = ants.get_spacing( pet3d )
+      spc = ants.get_spacing( pet3dr )
       minspc = upsample
       if min(spc) < minspc:
         minspc = min(spc)
       newspc = [minspc,minspc,minspc]
-      pet3dr = ants.resample_image( pet3d, newspc, interp_type=0 )
+      pet3dr = ants.resample_image( pet3dr, newspc, interp_type=0 )
 
-  simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-  rig, intermodality_similarity = reg( simg_fgd, pet3dr )
   if verbose:
-    print("rsf-perfusion template mask and labels")
+    print("pet registration")
+  rig, intermodality_similarity = reg( simg, pet3dr, simple=True )
+  if verbose:
+    print("pet mask and labels")
   bmask = ants.apply_transforms( pet3dr, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
   petlabels = ants.apply_transforms( pet3dr, simg_labels, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
   if verbose:
@@ -636,7 +642,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
       print( stats_pet )
 
   outdict = {}
-  outdict['pet3d'] = pet3dr
+  outdict['pet_resam'] = pet3dr
   outdict['brainmask'] = bmask
   outdict['labels'] = petlabels
   outdict['registration_result'] = rig
@@ -1132,7 +1138,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   return antspymm.convert_np_in_dict( outdict )
 
 
-def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32 ):
+def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False ):
     """
     Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
 
@@ -1158,19 +1164,22 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulation
     - Applies a two-step transformation: rigid followed by symmetric normalization (SyN).
     - Prints verbose output during execution.
     """
-#    return reg_initializer(
-#        ants.rank_intensity(fixed), ants.rank_intensity(moving), 
-#        n_simulations=n_simulations, max_rotation=max_rotation, 
-#        transform=transform_list, verbose=True )
     rifi = ants.rank_intensity(fixed)
     rimi = ants.rank_intensity(moving)
-    reginit = reg_initializer( rifi, rimi,
-        n_simulations=n_simulations, max_rotation=max_rotation, 
-        transform=transform_list, verbose=True )
-    myreg = ants.registration( rifi, rimi, 
-        'SyNOnly', intial_transform=reginit['fwdtransforms'][0], 
-        syn_sampling=2, sym_metric='cc' )
-    return myreg, ants.image_mutual_information( rifi, myreg['warpedmovout'] )
+    if simple:
+        myreg = ants.registration( 
+            ants.iMath(fixed,'Normalize'),
+            ants.iMath(moving,'Normalize'), 
+            'SyNBold', syn_sampling=2, sym_metric='cc', verbose=False )
+    else:
+        reginit = reg_initializer( rifi, rimi,
+            n_simulations=n_simulations, max_rotation=max_rotation, 
+            transform=transform_list, verbose=True )
+        myreg = ants.registration( rifi, rimi, 
+            'SyNOnly', intial_transform=reginit['fwdtransforms'][0], 
+            syn_sampling=2, sym_metric='cc', verbose=False )
+    mymi = ants.image_mutual_information( rifi, myreg['warpedmovout'] )
+    return myreg, mymi
 
 
 def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
