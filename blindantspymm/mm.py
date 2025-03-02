@@ -675,7 +675,10 @@ def template_based_labeling(template, template_mask, prior_template, prior_templ
     zz = ants.affine_initializer(timgbc, prior_template, search_factor=200, radian_fraction=2, use_principal_axis=True, local_search_iterations=20)
     prior_templatereg = ants.registration(timgbc, prior_template, type_of_transform, initial_transform=zz)
     prior_templatelab = ants.apply_transforms(timgbc, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='nearestNeighbor')
-    return {'transformed_template': timgbc, 'transformed_labels': prior_templatelab}
+    prior_templatelab_og = ants.apply_transforms(template, prior_templatelab0, prior_templatereg['fwdtransforms'], interpolator='nearestNeighbor')
+    return {'transformed_template': timgbc, 
+        'transformed_labels': prior_templatelab, 
+        'transformed_labels_orig_space': prior_templatelab_og}
 
 
 def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec):

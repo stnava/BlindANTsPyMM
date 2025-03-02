@@ -34,17 +34,18 @@ if not "tlab" in globals():
  #   ants.plot( timgbc, ptemlab, crop=True )
     ants.image_write( timgbc, '/tmp/tempb.nii.gz')
     ants.image_write( ptemlab, '/tmp/templab.nii.gz')
+    template_labels = tlab['transformed_labels_orig_space']
 
 # here i am using these data-driven labels rather than the prior-based labels 
 # because i believe they are a little more generically relevant for the resolution 
 # of the data on hand
-template_labels = curvanato.cluster_image_gradient_prop( template_mask, n_clusters=8, sigma=1.0 )
+# template_labels = curvanato.cluster_image_gradient_prop( template_mask, n_clusters=8, sigma=1.0 )
 if not "s" in globals():
     s = blindantspymm.structural( simg, simg_mask, template, template_mask, template_labels )
     s_labels = s['inverse_warped_labels']
     print( s['brain_mask_overlap'] )
     print( s['label_geometry'] )
-#    ants.plot( simg * simg_mask, s_labels, crop=True )
+    ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
