@@ -115,7 +115,7 @@ def widen_summary_dataframe(mydf, description='Label', value='VolumeInMillimeter
     return df_wide
 
 
-def structural(simg, simg_mask, template, template_mask, template_labels, type_of_transform='antsRegistrationSyNQuick[s]'):
+def structural(simg, simg_mask, template, template_mask, template_labels, type_of_transform='antsRegistrationSyNQuick[s]', upsample=0.0 ):
     """
     Perform image registration of a structural image to a template and propagate masks and labels.
     
@@ -132,7 +132,8 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
         Labeled regions in the template space to be transformed.
     type_of_transform : str, optional
         The registration type (default is 'antsRegistrationSyNQuick[s]').
-    
+    upsample: spacing to which we upsample the image (uniform); set to zero to skip
+
     Returns:
     dict
         A dictionary with registered images and transforms:
@@ -149,6 +150,12 @@ def structural(simg, simg_mask, template, template_mask, template_labels, type_o
     tbrain = template * template_mask
     tbrain = ants.crop_image(tbrain, tmask )
     tbrain[ tbrain < 0. ] = 0.
+    if upsample > 0.:
+        spc = ants.get_spacing( simg )
+        minspc = upsample
+        newspc = [minspc]*simg.dimension
+        simg = ants.resample_image( simg, newspc, interp_type=0 )
+        simg_mask = ants.resample_image( simg_mask, newspc, interp_type=1 )
     sbrain = simg * simg_mask
     sbrain[ sbrain < 0.0 ] = 0.0
     ritbrain=ants.rank_intensity(tbrain)
@@ -1263,3 +1270,64 @@ def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
         if bestvar == 0.0 and compreg is not None:
             return compreg        
         return bestreg
+
+
+def merge_idp_dataframes(s=None, prf=None, mypet=None, dti=None, rsf=None, output_path=None):
+    """
+    Generate a summary dataframe by concatenating multiple sources of ROI-based imaging metrics.
+    None of the inputs are required; missing data sources will be ignored.
+    
+    Parameters:
+    -----------
+    s : dict, optional
+        Dictionary containing 'label_geometry' for ROI volumes.
+    prf : dict, optional
+        Dictionary containing 'label_mean' for ROI perfusion and CBF.
+    mypet : dict, optional
+        Dictionary containing 'label_mean' for ROI mean PET values.
+    dti : dict, optional
+        Dictionary containing 'label_mean_fa' (FA mean) and 'label_mean_md' (MD mean).
+    rsf : dict, optional
+        Dictionary containing 'label_mean_alff', 'label_mean_falff', 'label_mean_peraf' (resting-state metrics),
+        and 'correlation' (ROI correlations at rest).
+    output_path : str, optional
+        If provided, saves the resulting dataframe as a CSV file.
+    
+    Returns:
+    --------
+    pd.DataFrame
+        A dataframe containing the concatenated summary of all available metrics.
+    """
+    data_frames = []
+    import pandas as pd
+
+    if s and 'label_geometry' in s:
+        data_frames.append(s['label_geometry'])
+    if prf and 'label_mean' in prf:
+        data_frames.append(prf['label_mean'])
+    if mypet and 'label_mean' in mypet:
+        data_frames.append(mypet['label_mean'])
+    if dti:
+        if 'label_mean_fa' in dti:
+            data_frames.append(dti['label_mean_fa'])
+        if 'label_mean_md' in dti:
+            data_frames.append(dti['label_mean_md'])
+    if rsf:
+        if 'label_mean_alff' in rsf:
+            data_frames.append(rsf['label_mean_alff'])
+        if 'label_mean_falff' in rsf:
+            data_frames.append(rsf['label_mean_falff'])
+        if 'label_mean_peraf' in rsf:
+            data_frames.append(rsf['label_mean_peraf'])
+        if 'correlation' in rsf:
+            data_frames.append(rsf['correlation'])
+    
+    if not data_frames:
+        raise ValueError("No valid data sources provided. At least one input must contain valid data.")
+    
+    summary_df = pd.concat(data_frames, axis=1)
+    
+    if output_path:
+        summary_df.to_csv(output_path)
+    
+    return summary_df
