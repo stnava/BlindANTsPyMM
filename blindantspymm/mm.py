@@ -764,7 +764,7 @@ def rsfmri_to_correlation_matrix(rsfmri, roi_labels):
     return corMat
 
 
-def rsfmri_to_correlation_matrix_wide(rsfmri, roi_labels):
+def rsfmri_to_correlation_matrix_wide(rsfmri, roi_labels, corrprefix='rsf.'):
     """
     Compute the correlation matrix from an rsfMRI image given an ROI label image.
     
@@ -773,6 +773,8 @@ def rsfmri_to_correlation_matrix_wide(rsfmri, roi_labels):
         4D resting-state fMRI image.
     roi_labels : ANTsImage
         3D image with labeled ROIs.
+    corrprefix: string
+        prefix to prepend to column names
 
     Returns:
     pd.DataFrame
@@ -800,7 +802,7 @@ def rsfmri_to_correlation_matrix_wide(rsfmri, roi_labels):
     # Construct a well-named dataframe without special characters
     col_names = [f"Corr_Label{int(a)}_Label{int(b)}" for a, b in roi_pairs]
     df_wide = pd.DataFrame([cor_values], columns=col_names)
-
+    df_wide = df_wide.add_prefix( corrprefix )
     return df_wide
 
 def rsfmri( fmri, simg, simg_mask, simg_labels,

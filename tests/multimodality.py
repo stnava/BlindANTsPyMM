@@ -51,7 +51,7 @@ if not "s" in globals():
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "mypet" in globals():
-    mypet = blindantspymm.pet( ptimg, simg, simg_mask, s_labels, verbose=True )
+    mypet = blindantspymm.pet( ptimg, simg, simg_mask, s_labels, upsample=0.8, verbose=True )
     ants.image_write( mypet['registration_result']['warpedfixout'], '/tmp/x1pet.nii.gz' )
     ants.image_write( mypet['pet_resam'], '/tmp/x0pet.nii.gz' )
     print( 'pet:intermodality_similarity ' + str(mypet['intermodality_similarity'] ))
@@ -60,7 +60,7 @@ if not "prf" in globals():
 #    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
 #        tc='alternating', verbose=True )
     prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
-        tc='non', verbose=True )
+        tc='non', upsample=0.8, verbose=True )
     print(prf.keys())
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
@@ -72,15 +72,15 @@ if not "prf" in globals():
 
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
-    rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(50,1000) )
-    rsf = blindantspymm.rsfmri( rimgsub, simg, simg_mask, s_labels, verbose=True )
+    rimgsub = antspymm.remove_volumes_from_timeseries( rimg, range(250,1000) )
+    rsf = blindantspymm.rsfmri( rimgsub, simg, simg_mask, s_labels, upsample=0.8, verbose=True )
     ants.image_write( rsf['registration_result']['warpedmovout'], '/tmp/x1rsf.nii.gz' )
     ants.image_write( rsf['fmri_template'], '/tmp/x0rsf.nii.gz' )
     print( rsf['correlation'] )
     print( 'rsf:intermodality_similarity ' + str(rsf['intermodality_similarity'] ))
 
 if not "dti" in globals():
-    dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec, upsample=1.0 )
+    dti = blindantspymm.dwi( dimg, simg, simg_mask, s_labels, dwibval, dwibvec, upsample=0.8 )
     ants.image_write( dti['registration_result']['warpedmovout'], '/tmp/x1dti.nii.gz' )
     ants.image_write( dti['dwimean'], '/tmp/x0dti.nii.gz' )
     print( 'dti:intermodality_similarity ' + str(dti['intermodality_similarity'] ))
