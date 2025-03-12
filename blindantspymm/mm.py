@@ -228,6 +228,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
                    trim_the_mask=4.25,
                    upsample=2.0,
                    perfusion_regression_model='linear',
+                   brain_based_registration=False,
                    verbose=False ):
   """
   Estimate perfusion from a BOLD time series image.  Will attempt to figure out the T-C labels from the data.  The function uses defaults to quantify CBF but these will usually not be correct for your own data.  See the function calculate_CBF for an example of how one might do quantification based on the outputs of this function specifically the perfusion, m0 and mask images that are part of the output dictionary.
@@ -273,6 +274,8 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
   upsample: spacing to which we upsample the image (uniform); set to zero to skip
 
   perfusion_regression_model: string 'linear', 'ransac', 'theilsen', 'huber', 'quantile', 'sgd'; 'linear' and 'huber' are the only ones that work ok by default and are relatively quick to compute.
+
+  brain_based_registration : boolean
 
   verbose : boolean
 
@@ -349,11 +352,15 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
       fmri = ants.resample_image( fmri, newspc, interp_type=0 )
   fmri_template = antspymm.get_average_rsf( fmri )
   simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+  if brain_based_registration :
+    simg_fgd = simg * simg_mask
   rig, intermodality_similarity = reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ] )
   if verbose:
     print("rsf-perfusion template mask and labels")
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
   rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
+  if verbose:
+    ants.plot( fmri_template, rsflabels, crop=True, axis=2 )
   if m0_indices is None:
     if n_to_trim is None:
         n_to_trim=0
@@ -827,6 +834,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
     powers = False,
     upsample = 3.0,
     clean_tmp = None,
+    brain_based_registration = False,
     verbose=False ):
   """
   Compute resting state network correlation maps based on user input labels.
@@ -869,6 +877,8 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   upsample : float optionally isotropically upsample data to upsample (the parameter value) in mm during the registration process if data is below that resolution; if the input spacing is less than that provided by the user, the data will simply be resampled to isotropic resolution
 
   clean_tmp : will automatically try to clean the tmp directory - not recommended but can be used in distributed computing systems to help prevent failures due to accumulation of tmp files when doing large-scale processing.  if this is set, the float value clean_tmp will be interpreted as the age in hours of files to be cleaned.
+
+  brain_based_registration : boolean
 
   verbose : boolean
 
@@ -919,6 +929,8 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
       fmri = ants.resample_image( fmri, newspc, interp_type=0 )
   fmri_template = antspymm.get_average_rsf( fmri )
   simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+  if brain_based_registration :
+    simg_fgd = simg * simg_mask
   rig, intermodality_similarity = reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ] )
   if verbose:
     print("rsf template mask and labels")
