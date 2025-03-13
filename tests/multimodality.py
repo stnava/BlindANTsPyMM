@@ -69,7 +69,6 @@ if not "prf" in globals():
     prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
         tc='non', upsample=myup, verbose=True )
     print(prf.keys())
-    ants.image_write( simg, '/tmp/x1str.nii.gz' )
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
     print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
@@ -115,7 +114,7 @@ if False:
 
 
 
-test=True
+test=False
 if test:
     simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
     simg_fgd = simg * simg_mask

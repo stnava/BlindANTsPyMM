@@ -39,17 +39,19 @@ if not "s" in globals():
     # ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "prf" in globals():
+    # we use a different registration strategy here vs in the non-human example
     prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=8,
-        tc='alternating', verbose=True, upsample=myup, brain_based_registration = True )
+        tc='alternating', verbose=True, upsample=myup, 
+        registration_strategy=['brain_based', 'optimal', 'normalize'] )
     print(prf.keys())
     ants.image_write( simg, '/tmp/x1str.nii.gz' )
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
     ants.plot( simg * simg_mask, prf['registration_result']['warpedmovout'], crop=True )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
     print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
-    mydf=pd.DataFrame( ants.timeseries_to_matrix(pfimg, prf['brainmask'] ) )
-    mydf.to_csv("/tmp/mat2.csv")
-    prf['nuisance'].to_csv("/tmp/nuis.csv")
+    # mydf=pd.DataFrame( ants.timeseries_to_matrix(pfimg, prf['brainmask'] ) )
+    # mydf.to_csv("/tmp/mat2.csv")
+    # prf['nuisance'].to_csv("/tmp/nuis.csv")
     ants.image_write( prf['cbf'], '/tmp/tempcbf.nii.gz' )
 
 ###################

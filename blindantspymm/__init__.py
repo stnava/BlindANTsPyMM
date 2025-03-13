@@ -18,3 +18,4 @@ from .mm import rsfmri_to_correlation_matrix_wide
 from .mm import reg
 from .mm import reg_opt
 from .mm import reg_initializer
+from .mm import validate_registration_strategy

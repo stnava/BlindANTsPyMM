@@ -73,6 +73,38 @@ def version( ):
               }
 
 
+def validate_registration_strategy(registration_strategy):
+    """
+    Validates the registration strategy list.
+
+    Parameters:
+    registration_strategy : list of str
+        A list where:
+        - The first entry must be 'brain_based' or 'head_based'
+        - The second entry must be 'simple', 'standard' or 'optimal'
+        - The third entry must be 'normalize' or 'rank'
+
+    Raises:
+    ValueError
+        If the input is not valid.
+    """
+    valid_first = {'brain_based', 'head_based'}
+    valid_second = {'simple', 'standard', 'optimal'}
+    valid_third = {'normalize', 'rank'}
+    
+    if not isinstance(registration_strategy, list) or len(registration_strategy) != 3:
+        raise ValueError("registration_strategy must be a list of three elements.")
+    
+    first, second, third = registration_strategy
+    
+    if first not in valid_first:
+        raise ValueError(f"Invalid first entry: {first}. Must be one of {valid_first}.")
+    if second not in valid_second:
+        raise ValueError(f"Invalid second entry: {second}. Must be one of {valid_second}.")
+    if third not in valid_third:
+        raise ValueError(f"Invalid third entry: {third}. Must be one of {valid_third}.")
+
+
 def widen_summary_dataframe(mydf, description='Label', value='VolumeInMillimeters', skip_first=False, prefix='' ):
     """
     Convert a long-format dataframe to a single-row wide-format dataframe.
@@ -228,8 +260,9 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
                    trim_the_mask=4.25,
                    upsample=2.0,
                    perfusion_regression_model='linear',
-                   brain_based_registration=False,
+                   registration_strategy=['head_based','standard','rank'],
                    verbose=False ):
+  validate_registration_strategy( registration_strategy )
   """
   Estimate perfusion from a BOLD time series image.  Will attempt to figure out the T-C labels from the data.  The function uses defaults to quantify CBF but these will usually not be correct for your own data.  See the function calculate_CBF for an example of how one might do quantification based on the outputs of this function specifically the perfusion, m0 and mask images that are part of the output dictionary.
 
@@ -275,7 +308,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
 
   perfusion_regression_model: string 'linear', 'ransac', 'theilsen', 'huber', 'quantile', 'sgd'; 'linear' and 'huber' are the only ones that work ok by default and are relatively quick to compute.
 
-  brain_based_registration : boolean
+  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
 
   verbose : boolean
 
@@ -340,6 +373,9 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
     encoded_matrix = np.array([encoding_dict[char] for char in char_list])
     return encoded_matrix
 
+  validate_registration_strategy( registration_strategy )
+
+
   if verbose:
     print("rsf-perfusion registration")
   A = np.zeros((1,1))
@@ -352,9 +388,10 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
       fmri = ants.resample_image( fmri, newspc, interp_type=0 )
   fmri_template = antspymm.get_average_rsf( fmri )
   simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-  if brain_based_registration :
+  if registration_strategy[0] == 'brain_based' :
     simg_fgd = simg * simg_mask
-  rig, intermodality_similarity = reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ] )
+  rig, intermodality_similarity = reg_opt( simg_fgd, fmri_template, transform_list=[ 'Rigid' ], 
+    registration_strategy = registration_strategy[1], intensity_transform=registration_strategy[2] )
   if verbose:
     print("rsf-perfusion template mask and labels")
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
@@ -588,7 +625,9 @@ def pet( pet3d, simg, simg_mask, simg_labels,
                    type_of_transform='BOLDRigid',
                    upsample=1.,
                    reorient=True,
+                   registration_strategy=['head_based','simple','normalize'],
                    verbose=False ):
+  validate_registration_strategy( registration_strategy )
   """
   Summarize PET data by a (registration) transform of structural labels to the PET space.
 
@@ -610,6 +649,8 @@ def pet( pet3d, simg, simg_mask, simg_labels,
   upsample: spacing to which we upsample the image (set to zero to skip)
 
   reorient: boolean to allow reorientation
+
+  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
 
   verbose : boolean
 
@@ -636,7 +677,12 @@ def pet( pet3d, simg, simg_mask, simg_labels,
 
   if verbose:
     print("pet registration")
-  rig, intermodality_similarity = reg( simg, pet3dr, simple=False )
+  if registration_strategy[0] == 'brain_based' :
+    simg_fgd = simg * simg_mask
+  else:
+    simg_fgd = simg
+  rig, intermodality_similarity = reg_opt( simg_fgd, pet3dr, transform_list=[ 'Rigid' ], 
+    registration_strategy = registration_strategy[1], intensity_transform=registration_strategy[2] )
   if verbose:
     print("pet mask and labels")
   bmask = ants.apply_transforms( pet3dr, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
@@ -700,7 +746,8 @@ def template_based_labeling(template, template_mask, prior_template, prior_templ
         'registration_result' : prior_templatereg }
 
 
-def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec, upsample=0. ):
+def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec, upsample=0.,                   registration_strategy=['head_based','simple','normalize'] ):
+    validate_registration_strategy( registration_strategy )
     """
     Perform diffusion-weighted imaging (DWI) registration and reconstruction.
 
@@ -719,6 +766,8 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec, upsample=0. ):
         B-vector file.
     upsample : float optionally isotropically upsample data to upsample (the parameter value) in mm during the registration process if data is below that resolution; if the input spacing is less than that provided by the user, the data will simply be resampled to isotropic resolution
 
+    registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
+
     Returns:
     dict
         Dictionary containing registered DWI image and diffusion tensor imaging (DTI) results.
@@ -731,7 +780,13 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec, upsample=0. ):
         newspc = [minspc,minspc,minspc, spc[3]]
         dimg = ants.resample_image( dimg, newspc, interp_type=0 )
     dwimean = ants.get_average_of_timeseries(dimg)
-    dwireg, intermodality_similarity = reg( simg, dwimean, transform_list=['Rigid'] )
+
+    if registration_strategy[0] == 'brain_based' :
+        simg_fgd = simg * simg_mask
+    else:
+        simg_fgd = simg
+    dwireg, intermodality_similarity = reg_opt( simg_fgd, dwimean, transform_list=[ 'Rigid' ], 
+        registration_strategy = registration_strategy[1], intensity_transform=registration_strategy[2] )
     dwimask = ants.apply_transforms(dwimean, simg_mask, dwireg['invtransforms'],
         interpolator='genericLabel')
     dwilab = ants.apply_transforms(dwimean, simg_labels, dwireg['invtransforms'],
@@ -834,8 +889,9 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
     powers = False,
     upsample = 3.0,
     clean_tmp = None,
-    brain_based_registration = False,
+    registration_strategy=['head_based','standard','rank'],
     verbose=False ):
+  validate_registration_strategy( registration_strategy )
   """
   Compute resting state network correlation maps based on user input labels.
 
@@ -878,7 +934,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
 
   clean_tmp : will automatically try to clean the tmp directory - not recommended but can be used in distributed computing systems to help prevent failures due to accumulation of tmp files when doing large-scale processing.  if this is set, the float value clean_tmp will be interpreted as the age in hours of files to be cleaned.
 
-  brain_based_registration : boolean
+  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
 
   verbose : boolean
 
@@ -929,9 +985,10 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
       fmri = ants.resample_image( fmri, newspc, interp_type=0 )
   fmri_template = antspymm.get_average_rsf( fmri )
   simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-  if brain_based_registration :
+  if registration_strategy[0] == 'brain_based' :
     simg_fgd = simg * simg_mask
-  rig, intermodality_similarity = reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ] )
+  rig, intermodality_similarity = reg_opt( simg_fgd, fmri_template, transform_list=[ 'Rigid' ], 
+    registration_strategy = registration_strategy[1], intensity_transform=registration_strategy[2] )
   if verbose:
     print("rsf template mask and labels")
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
@@ -1240,10 +1297,52 @@ def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
         return bestreg
 
 
+def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False ):
+    """
+    Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
+
+    Parameters:
+    -----------
+    fixed : ANTsImage
+        The fixed image for registration.
+    moving : ANTsImage
+        The moving image for registration.
+    transform_list: list of strings
+    max_rotation : float
+    n_simulations : int
+    
+    Returns:
+    --------
+    dict
+        A dictionary containing the registration results from `antspymm.tra_initializer`.
+    
+    Notes:
+    ------
+    - Uses 32 simulations to initialize transformations.
+    - Allows a maximum rotation of 30 degrees.
+    - Applies a two-step transformation: rigid followed by symmetric normalization (SyN).
+    - Prints verbose output during execution.
+    """
+    rifi = ants.rank_intensity(fixed)
+    rimi = ants.rank_intensity(moving)
+    if simple:
+        myreg = ants.registration( 
+            ants.iMath(fixed,'Normalize'),
+            ants.iMath(moving,'Normalize'), 
+            'SyNBold', syn_sampling=2, sym_metric='cc', verbose=False )
+    else:
+        reginit = reg_initializer( rifi, rimi,
+            n_simulations=n_simulations, max_rotation=max_rotation, 
+            transform=transform_list, verbose=True )
+        myreg = ants.registration( rifi, rimi, 
+            'SyNOnly', intial_transform=reginit['fwdtransforms'][0], 
+            syn_sampling=2, sym_metric='cc', verbose=False )
+    mymi = ants.image_mutual_information( rifi, myreg['warpedmovout'] )
+    return myreg, mymi
 
 
 def reg_opt(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations=32,
-        simple=False, intensity_transform='normalize', search_registration=['SyNOnly','SyN','SyNBold'], verbose=True):
+        registration_strategy='optimal', intensity_transform='normalize', search_registration=['SyNOnly','SyN','SyNBold'], verbose=True):
     """
     Perform registration using `antspymm.reg_initializer` with rigid and SyN transformations.
 
@@ -1259,8 +1358,7 @@ def reg_opt(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulat
     transform_list: list of strings
     max_rotation : float
     n_simulations : int
-    simple : bool
-        If True, only the simple registration is performed and returned.
+    registration_strategy : either 'simple', 'standard' or 'optimal'
     intensity_transform : 'rank' or 'normalize'
     search_registration : list of strings
         Types of follow-on registration to test, e.g., ['SyNOnly', 'SyNBold', 'SyN']
@@ -1278,12 +1376,15 @@ def reg_opt(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulat
     else:
         rifi = ants.iMath(fixed, 'Normalize')
         rimi = ants.iMath(moving, 'Normalize')
-    
+
+    if registration_strategy == 'standard':
+        return reg( rifi, rimi, transform_list=[ 'Rigid' ] )
+
     # Run simple registration
     simple_reg = ants.registration(rifi, rimi, 'SyNBold', syn_sampling=2, sym_metric='cc', verbose=False)
     simple_mi = ants.image_mutual_information(rifi, simple_reg['warpedmovout'])
     
-    if simple:
+    if registration_strategy == 'simple':
         return simple_reg, simple_mi
     
     # Run full registration with multiple search_registration options
