@@ -636,7 +636,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
 
   if verbose:
     print("pet registration")
-  rig, intermodality_similarity = reg( simg, pet3dr, simple=True )
+  rig, intermodality_similarity = reg( simg, pet3dr, simple=False )
   if verbose:
     print("pet mask and labels")
   bmask = ants.apply_transforms( pet3dr, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
@@ -1167,54 +1167,6 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   return antspymm.convert_np_in_dict( outdict )
 
 
-def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False, intensity_transform='normalize', search_registration='SyNOnly' ):
-    """
-    Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
-
-    Parameters:
-    -----------
-    fixed : ANTsImage
-        The fixed image for registration.
-    moving : ANTsImage
-        The moving image for registration.
-    transform_list: list of strings
-    max_rotation : float
-    n_simulations : int
-    intensity_transform : 'rank' or 'normalize'
-    search_registration : type of follow-on registration after initial search usually 'SyNOnly' or 'SyNBold' or 'SyN'
-    
-    Returns:
-    --------
-    dict
-        A dictionary containing the registration results from `antspymm.tra_initializer`.
-    
-    Notes:
-    ------
-    - Uses 32 simulations to initialize transformations.
-    - Allows a maximum rotation of 30 degrees.
-    - Applies a two-step transformation: rigid followed by symmetric normalization (SyN).
-    - Prints verbose output during execution.
-    """
-    if intensity_transform == 'rank':
-        rifi = ants.rank_intensity(fixed)
-        rimi = ants.rank_intensity(moving)
-    else:
-        rifi = ants.iMath(fixed,'Normalize')
-        rimi = ants.iMath(moving,'Normalize')
-    if simple:
-        myreg = ants.registration( rifi, rimi, 
-            'SyNBold', syn_sampling=2, sym_metric='cc', verbose=False )
-    else:
-        reginit = reg_initializer( rifi, rimi,
-            n_simulations=n_simulations, max_rotation=max_rotation, 
-            transform=transform_list, verbose=True )
-        myreg = ants.registration( rifi, rimi, 
-            search_registration, intial_transform=reginit['fwdtransforms'][0], 
-            syn_sampling=2, sym_metric='cc', verbose=False )
-    mymi = ants.image_mutual_information( rifi, myreg['warpedmovout'] )
-    return myreg, mymi
-
-
 def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
     transform=['rigid'], compreg=None, verbose=False ):
     """
@@ -1287,6 +1239,62 @@ def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
             return compreg        
         return bestreg
 
+
+def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations=32,
+        simple=False, intensity_transform='normalize', search_registration='SyNOnly'):
+    """
+    Perform registration using `antspymm.reg_initializer` with rigid and SyN transformations.
+
+    Runs a simple registration first, then a more complex version, and selects the best result
+    based on mutual information (MI), unless `simple=True`, in which case only the simple version is run.
+    
+    Parameters:
+    -----------
+    fixed : ANTsImage
+        The fixed image for registration.
+    moving : ANTsImage
+        The moving image for registration.
+    transform_list: list of strings
+    max_rotation : float
+    n_simulations : int
+    simple : bool
+        If True, only the simple registration is performed and returned.
+    intensity_transform : 'rank' or 'normalize'
+    search_registration : type of follow-on registration after initial search usually 'SyNOnly' or 'SyNBold' or 'SyN'
+    
+    Returns:
+    --------
+    dict
+        A dictionary containing the best registration results based on MI, or just the simple registration if `simple=True`.
+    """
+    # Apply intensity transform
+    if intensity_transform == 'rank':
+        rifi = ants.rank_intensity(fixed)
+        rimi = ants.rank_intensity(moving)
+    else:
+        rifi = ants.iMath(fixed, 'Normalize')
+        rimi = ants.iMath(moving, 'Normalize')
+    
+    # Run simple registration
+    simple_reg = ants.registration(rifi, rimi, 'SyNBold', syn_sampling=2, sym_metric='cc', verbose=False)
+    simple_mi = ants.image_mutual_information(rifi, simple_reg['warpedmovout'])
+    
+    if simple:
+        return simple_reg, simple_mi
+    
+    # Run full registration
+    reginit = reg_initializer(rifi, rimi, n_simulations=n_simulations, max_rotation=max_rotation, 
+                              transform=transform_list, verbose=True)
+    full_reg = ants.registration(rifi, rimi, search_registration, 
+                                 initial_transform=reginit['fwdtransforms'][0], 
+                                 syn_sampling=2, sym_metric='cc', verbose=False)
+    full_mi = ants.image_mutual_information(rifi, full_reg['warpedmovout'])
+    
+    # Choose best registration based on MI
+    if full_mi < simple_mi:
+        return full_reg, full_mi
+    else:
+        return simple_reg, simple_mi
 
 def merge_idp_dataframes(s=None, prf=None, mypet=None, dti=None, rsf=None, output_path=None):
     """
