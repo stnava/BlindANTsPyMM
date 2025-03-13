@@ -80,9 +80,9 @@ def validate_registration_strategy(registration_strategy):
     Parameters:
     registration_strategy : list of str
         A list where:
-        - The first entry must be 'brain_based' or 'head_based'
-        - The second entry must be 'simple', 'standard' or 'optimal'
-        - The third entry must be 'normalize' or 'rank'
+        - The first entry must be 'brain_based' or 'head_based' and refers to the features used for the fixed and moving images
+        - The second entry must be 'simple', 'standard' or 'optimal' and corresponds to the registration strategy that is used
+        - The third entry must be 'normalize' or 'rank' and corresponds to the intensity transformations applied to the fixed and moving image
 
     Raises:
     ValueError
@@ -308,7 +308,7 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
 
   perfusion_regression_model: string 'linear', 'ransac', 'theilsen', 'huber', 'quantile', 'sgd'; 'linear' and 'huber' are the only ones that work ok by default and are relatively quick to compute.
 
-  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
+  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'; see help for validate_registration_strategy
 
   verbose : boolean
 
@@ -650,7 +650,7 @@ def pet( pet3d, simg, simg_mask, simg_labels,
 
   reorient: boolean to allow reorientation
 
-  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
+  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'; see help for validate_registration_strategy
 
   verbose : boolean
 
@@ -766,7 +766,7 @@ def dwi(dimg, simg, simg_mask, simg_labels, dwibval, dwibvec, upsample=0.,      
         B-vector file.
     upsample : float optionally isotropically upsample data to upsample (the parameter value) in mm during the registration process if data is below that resolution; if the input spacing is less than that provided by the user, the data will simply be resampled to isotropic resolution
 
-    registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
+    registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'; see help for validate_registration_strategy
 
     Returns:
     dict
@@ -934,7 +934,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
 
   clean_tmp : will automatically try to clean the tmp directory - not recommended but can be used in distributed computing systems to help prevent failures due to accumulation of tmp files when doing large-scale processing.  if this is set, the float value clean_tmp will be interpreted as the age in hours of files to be cleaned.
 
-  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'
+  registration_strategy : a list of strings with the first entry being one of 'brain_based', 'head_based', the 2nd being 'simple', 'standard', or 'optimal', the 3rd being 'normalize' or 'rank'; see help for validate_registration_strategy
 
   verbose : boolean
 
