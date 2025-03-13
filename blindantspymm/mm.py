@@ -1240,7 +1240,9 @@ def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
         return bestreg
 
 
-def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations=32,
+
+
+def reg_opt(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations=32,
         simple=False, intensity_transform='normalize', search_registration=['SyNOnly','SyN','SyNBold'], verbose=True):
     """
     Perform registration using `antspymm.reg_initializer` with rigid and SyN transformations.

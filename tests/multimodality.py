@@ -54,6 +54,7 @@ if not "s" in globals():
     print( 'struct:intermodality_similarity ' + str(s['intermodality_similarity'] ))
 #    ants.plot( simg * simg_mask, s_labels, crop=True )
 
+
 if not "mypet" in globals():
     mypet = blindantspymm.pet( ptimg, simg, simg_mask, s_labels, upsample=myup, verbose=True )
     ants.plot( simg * simg_mask, mypet['registration_result']['warpedmovout'], crop=True )
@@ -62,33 +63,13 @@ if not "mypet" in globals():
     print( 'pet:intermodality_similarity ' + str(mypet['intermodality_similarity'] ))
 
 
-if True:
-    simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
-    simg_fgd = simg * simg_mask
-    fmri_template = ants.get_average_of_timeseries( pfimg )
-    reg0 = ants.registration( simg_fgd, fmri_template, 'Rigid' )
-    intermodality_similarity0 = ants.image_mutual_information( simg_fgd, reg0['warpedmovout'] )
-    print( str(intermodality_similarity0)  )
-    reg0, intermodality_similarity0 = blindantspymm.reg( simg, fmri_template, transform_list=[ 'Rigid' ], simple=False, n_simulations=8, search_registration='SyNBold'  )
-    reg1, intermodality_similarity1 = blindantspymm.reg( simg, fmri_template, transform_list=[ 'Rigid' ], simple=False, n_simulations=8, search_registration='SyNOnly'  )
-    print( str(intermodality_similarity1 )  )
-    reg2, intermodality_similarity2 = blindantspymm.reg( simg, fmri_template, transform_list=[ 'Rigid' ], simple=False, n_simulations=8, search_registration='SyN' )
-    print( str(intermodality_similarity0) + ' ' + str(intermodality_similarity1) + ' ' + str(intermodality_similarity2 ) )
-    ants.image_write( simg_fgd, '/tmp/a.nii.gz') 
-    ants.image_write( reg1['warpedmovout'], '/tmp/b.nii.gz') 
-    ants.plot( simg_fgd, reg0['warpedmovout'] )
-    ants.plot( simg_fgd, reg1['warpedmovout'] )
-    ants.plot( simg_fgd, reg2['warpedmovout'] )
-    # ants.plot( simg * simg_mask, mypet['registration_result']['warpedmovout'], crop=True )
-
-zeek
-
 if not "prf" in globals():
 #    prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
 #        tc='alternating', verbose=True )
     prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=4,
         tc='non', upsample=myup, verbose=True )
     print(prf.keys())
+    ants.image_write( simg, '/tmp/x1str.nii.gz' )
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
     print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
@@ -97,7 +78,6 @@ if not "prf" in globals():
     prf['nuisance'].to_csv("/tmp/nuis.csv")
     ants.image_write( prf['cbf'], '/tmp/tempcbf.nii.gz' )
 
-zeek
 
 if not "rsf" in globals(): # not implemented yet
     print("Begin rsf")
@@ -135,3 +115,22 @@ if False:
 
 
 
+test=True
+if test:
+    simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+    simg_fgd = simg * simg_mask
+    fmri_template = ants.get_average_of_timeseries( pfimg )
+    reg0 = ants.registration( simg_fgd, fmri_template, 'Rigid' )
+    intermodality_similarity0 = ants.image_mutual_information( simg_fgd, reg0['warpedmovout'] )
+    print( str(intermodality_similarity0)  )
+    reg0, intermodality_similarity0 = blindantspymm.reg( simg, fmri_template, transform_list=[ 'Rigid' ], simple=False, n_simulations=32, intensity_transform='rank', search_registration=['SyNOnly'] )
+    reg1, intermodality_similarity1 = blindantspymm.reg( simg, fmri_template, transform_list=[ 'Rigid' ], simple=True  )
+    print( str(intermodality_similarity1 )  )
+    reg2, intermodality_similarity2 = blindantspymm.reg( simg, fmri_template, transform_list=[ 'Rigid' ], simple=True )
+    print( str(intermodality_similarity0) + ' ' + str(intermodality_similarity1) + ' ' + str(intermodality_similarity2 ) )
+    ants.image_write( simg, '/tmp/a.nii.gz') 
+    ants.image_write( reg0['warpedmovout'], '/tmp/b.nii.gz') 
+    ants.plot( simg_fgd, reg0['warpedmovout'] )
+    ants.plot( simg_fgd, reg1['warpedmovout'] )
+    ants.plot( simg_fgd, reg2['warpedmovout'] )
+    # ants.plot( simg * simg_mask, mypet['registration_result']['warpedmovout'], crop=True )
