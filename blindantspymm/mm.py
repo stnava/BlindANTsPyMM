@@ -1167,7 +1167,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   return antspymm.convert_np_in_dict( outdict )
 
 
-def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False ):
+def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False, intensity_transform='normalize' ):
     """
     Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
 
@@ -1180,6 +1180,7 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulation
     transform_list: list of strings
     max_rotation : float
     n_simulations : int
+    intensity_transform : 'rank' or 'normalize'
     
     Returns:
     --------
@@ -1193,19 +1194,21 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulation
     - Applies a two-step transformation: rigid followed by symmetric normalization (SyN).
     - Prints verbose output during execution.
     """
-    rifi = ants.rank_intensity(fixed)
-    rimi = ants.rank_intensity(moving)
+    if intensity_transform == 'rank':
+        rifi = ants.rank_intensity(fixed)
+        rimi = ants.rank_intensity(moving)
+    else:
+        rifi = ants.iMath(fixed,'Normalize')
+        rimi = ants.iMath(moving,'Normalize')
     if simple:
-        myreg = ants.registration( 
-            ants.iMath(fixed,'Normalize'),
-            ants.iMath(moving,'Normalize'), 
+        myreg = ants.registration( rifi, rimi, 
             'SyNBold', syn_sampling=2, sym_metric='cc', verbose=False )
     else:
         reginit = reg_initializer( rifi, rimi,
             n_simulations=n_simulations, max_rotation=max_rotation, 
             transform=transform_list, verbose=True )
         myreg = ants.registration( rifi, rimi, 
-            'SyNOnly', intial_transform=reginit['fwdtransforms'][0], 
+            'SyNBold', intial_transform=reginit['fwdtransforms'][0], 
             syn_sampling=2, sym_metric='cc', verbose=False )
     mymi = ants.image_mutual_information( rifi, myreg['warpedmovout'] )
     return myreg, mymi
