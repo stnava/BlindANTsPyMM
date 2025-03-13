@@ -359,8 +359,8 @@ def perfusion( fmri, simg, simg_mask, simg_labels,
     print("rsf-perfusion template mask and labels")
   bmask = ants.apply_transforms( fmri_template, simg_mask, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
   rsflabels = ants.apply_transforms( fmri_template, simg_labels, rig['invtransforms'], interpolator='genericLabel', which_to_invert=[True,False] )
-  if verbose:
-    ants.plot( fmri_template, rsflabels, crop=True, axis=2 )
+#  if verbose:
+#    ants.plot( fmri_template, rsflabels, crop=True, axis=2 )
   if m0_indices is None:
     if n_to_trim is None:
         n_to_trim=0
@@ -1167,7 +1167,7 @@ def rsfmri( fmri, simg, simg_mask, simg_labels,
   return antspymm.convert_np_in_dict( outdict )
 
 
-def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False, intensity_transform='normalize' ):
+def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulations=32, simple=False, intensity_transform='normalize', search_registration='SyNOnly' ):
     """
     Perform registration using `antspymm.tra_initializer` with rigid and SyN transformations.
 
@@ -1181,6 +1181,7 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulation
     max_rotation : float
     n_simulations : int
     intensity_transform : 'rank' or 'normalize'
+    search_registration : type of follow-on registration after initial search usually 'SyNOnly' or 'SyNBold' or 'SyN'
     
     Returns:
     --------
@@ -1208,7 +1209,7 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30. , n_simulation
             n_simulations=n_simulations, max_rotation=max_rotation, 
             transform=transform_list, verbose=True )
         myreg = ants.registration( rifi, rimi, 
-            'SyNBold', intial_transform=reginit['fwdtransforms'][0], 
+            search_registration, intial_transform=reginit['fwdtransforms'][0], 
             syn_sampling=2, sym_metric='cc', verbose=False )
     mymi = ants.image_mutual_information( rifi, myreg['warpedmovout'] )
     return myreg, mymi

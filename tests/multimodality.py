@@ -12,6 +12,9 @@ num=['053','040', '012', '044'][1]
 myup=2.0 # spatial resolution
 simg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1.nii.gz' )
 simg_mask = ants.image_read( ddir + 'ProcessedMRI/sub-PTCRA'+num+'/anat/sub-PTCRA'+num+'_run-001_t1mask.nii.gz' )
+simg_fgd = simg * simg_mask
+ants.image_write( simg_fgd, '/tmp/a.nii.gz') 
+
 rimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/func/sub-PTCRA'+num+'_run-001_rsfmri.nii.gz' )
 pfimg = ants.image_read( ddir + 'NiftiMRI/sub-PTCRA'+num+'/perf/sub-PTCRA'+num+'_run-001_perf.nii.gz' )
 
@@ -103,3 +106,23 @@ if False:
     ##############################################################
     summary_df.to_csv( "/tmp/temp.csv" )
 ##############################################################
+
+
+if False:
+    simg_fgd = simg * ants.threshold_image( simg, 'Otsu', 1)
+    simg_fgd = simg * simg_mask
+    fmri_template = ants.get_average_of_timeseries( pfimg )
+    reg0 = ants.registration( simg_fgd, fmri_template, 'Rigid' )
+    intermodality_similarity0 = ants.image_mutual_information( simg_fgd, reg0['warpedmovout'] )
+    print( str(intermodality_similarity0)  )
+    reg1, intermodality_similarity1 = blindantspymm.reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ], simple=False, n_simulations=8, search_registration='SyNBold'  )
+    print( str(intermodality_similarity1 )  )
+    reg2, intermodality_similarity2 = blindantspymm.reg( simg_fgd, fmri_template, transform_list=[ 'Rigid' ], simple=True, n_simulations=8 )
+    print( str(intermodality_similarity0) + ' ' + str(intermodality_similarity1) + ' ' + str(intermodality_similarity2 ) )
+    ants.image_write( simg_fgd, '/tmp/a.nii.gz') 
+    ants.image_write( reg2['warpedmovout'], '/tmp/b.nii.gz') 
+    ants.plot( simg_fgd, reg0['warpedmovout'] )
+    ants.plot( simg_fgd, reg1['warpedmovout'] )
+    ants.plot( simg_fgd, reg2['warpedmovout'] )
+
+
