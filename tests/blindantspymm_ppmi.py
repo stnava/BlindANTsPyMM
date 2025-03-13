@@ -36,13 +36,15 @@ if not "s" in globals():
     print( s['brain_mask_overlap'] )
     print( s['label_geometry'] )
     print( 'struct:intermodality_similarity ' + str(s['intermodality_similarity'] ))
-    ants.plot( simg * simg_mask, s_labels, crop=True )
+    # ants.plot( simg * simg_mask, s_labels, crop=True )
 
 if not "prf" in globals():
     prf = blindantspymm.perfusion( pfimg, simg, simg_mask, s_labels, nc=8,
         tc='alternating', verbose=True, upsample=myup, brain_based_registration = True )
     print(prf.keys())
+    ants.image_write( simg, '/tmp/x1str.nii.gz' )
     ants.image_write( prf['registration_result']['warpedmovout'], '/tmp/x1prf.nii.gz' )
+    ants.plot( simg * simg_mask, prf['registration_result']['warpedmovout'], crop=True )
     ants.image_write( prf['meanBold'], '/tmp/x0prf.nii.gz' )
     print( 'prf:intermodality_similarity ' + str(prf['intermodality_similarity'] ))
     mydf=pd.DataFrame( ants.timeseries_to_matrix(pfimg, prf['brainmask'] ) )

@@ -1241,12 +1241,12 @@ def reg_initializer( fixed, moving, n_simulations=32, max_rotation=30,
 
 
 def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations=32,
-        simple=False, intensity_transform='normalize', search_registration='SyNOnly'):
+        simple=False, intensity_transform='normalize', search_registration=['SyNOnly','SyN','SyNBold'], verbose=True):
     """
     Perform registration using `antspymm.reg_initializer` with rigid and SyN transformations.
 
-    Runs a simple registration first, then a more complex version, and selects the best result
-    based on mutual information (MI), unless `simple=True`, in which case only the simple version is run.
+    Runs a simple registration first, then iterates over user-specified `search_registration` values,
+    selecting the best result based on mutual information (MI), unless `simple=True`, in which case only the simple version is run.
     
     Parameters:
     -----------
@@ -1260,7 +1260,9 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations
     simple : bool
         If True, only the simple registration is performed and returned.
     intensity_transform : 'rank' or 'normalize'
-    search_registration : type of follow-on registration after initial search usually 'SyNOnly' or 'SyNBold' or 'SyN'
+    search_registration : list of strings
+        Types of follow-on registration to test, e.g., ['SyNOnly', 'SyNBold', 'SyN']
+    verbose : bool
     
     Returns:
     --------
@@ -1282,19 +1284,32 @@ def reg(fixed, moving, transform_list=['Rigid'], max_rotation=30., n_simulations
     if simple:
         return simple_reg, simple_mi
     
-    # Run full registration
+    # Run full registration with multiple search_registration options
     reginit = reg_initializer(rifi, rimi, n_simulations=n_simulations, max_rotation=max_rotation, 
-                              transform=transform_list, verbose=True)
-    full_reg = ants.registration(rifi, rimi, search_registration, 
-                                 initial_transform=reginit['fwdtransforms'][0], 
-                                 syn_sampling=2, sym_metric='cc', verbose=False)
-    full_mi = ants.image_mutual_information(rifi, full_reg['warpedmovout'])
+                              transform=transform_list, verbose=verbose)
+    best_reg = simple_reg
+    best_mi = simple_mi
+    best_search = 'SyNBold'
     
-    # Choose best registration based on MI
-    if full_mi < simple_mi:
-        return full_reg, full_mi
-    else:
-        return simple_reg, simple_mi
+    for sr in search_registration:
+        full_reg = ants.registration(rifi, rimi, sr, 
+                                     initial_transform=reginit['fwdtransforms'][0], 
+                                     syn_sampling=2, sym_metric='cc', verbose=False)
+        full_mi = ants.image_mutual_information(rifi, full_reg['warpedmovout'])
+        
+        if verbose:
+            print(f'Search: {sr}, MI: {full_mi}')
+        
+        if full_mi < best_mi:
+            best_reg = full_reg
+            best_mi = full_mi
+            best_search = sr
+    
+    if verbose:
+        print(f'Best registration: {best_search}, MI: {best_mi}')
+    
+    return best_reg, best_mi
+
 
 def merge_idp_dataframes(s=None, prf=None, mypet=None, dti=None, rsf=None, output_path=None):
     """
